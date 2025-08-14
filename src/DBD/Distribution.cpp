@@ -18,7 +18,7 @@ namespace DBD
 					skins.emplace(std::make_pair(name, profile));
 					logger::info("Added Texture Set: {}", name);
 				} catch (const std::exception& e) {
-					logger::error("Failed to add Texture Set: {}", folder.path().filename().string());
+					logger::error("Failed to add Texture Set: {}. Error: {}", folder.path().filename().string(), e.what());
 				}
 			}
 			logger::info("Loaded {} Texture Sets", skins.size());
