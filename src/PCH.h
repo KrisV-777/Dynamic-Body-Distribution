@@ -6,20 +6,18 @@
 #include "SKSE/SKSE.h"
 #pragma warning(pop)
 
-#include <unordered_map>
 #include <atomic>
+#include <unordered_map>
+
+#include "magic_enum.hpp"
 
 #pragma warning(push)
 #ifdef NDEBUG
-#	include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #else
-#	include <spdlog/sinks/msvc_sink.h>
+#include <spdlog/sinks/msvc_sink.h>
 #endif
 #pragma warning(pop)
-
-#include "Singleton.h"
-#include "Random.h"
-#include "DBD/Misc.h"
 
 namespace logger = SKSE::log;
 namespace fs = std::filesystem;
@@ -41,6 +39,22 @@ namespace stl
 #endif
 }
 
-#define DLLEXPORT __declspec(dllexport)
+struct FixedStringComparator
+{
+	bool operator()(const RE::BSFixedString& lhs, const RE::BSFixedString& rhs) const
+	{
+		return strcmp(lhs.data(), rhs.data()) < 0;
+	}
+};
 
-#include "Plugin.h"
+template <>
+struct std::formatter<RE::BSFixedString> : std::formatter<const char*>
+{
+	template <typename FormatContext>
+	auto format(const RE::BSFixedString& myStr, FormatContext& ctx) const
+	{
+		return std::formatter<const char*>::format(myStr.data(), ctx);
+	}
+};
+
+#define DLLEXPORT __declspec(dllexport)
