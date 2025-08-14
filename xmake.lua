@@ -25,7 +25,7 @@ option_end()
 -- https://github.com/xmake-io/xmake-repo/tree/dev
 add_requires("yaml-cpp", "frozen", "magic_enum")
 
-includes("lib/commonlibsse-ng")
+includes("lib/CommonLibVR")
 
 -- policies
 set_policy("package.requires_lock", true)
