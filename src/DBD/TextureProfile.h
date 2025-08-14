@@ -35,17 +35,17 @@ namespace DBD
 
 		void ApplyHeadTexture(RE::Actor* a_target) const;
 		void ApplySkinTexture(RE::Actor* a_target) const;
-		void ApplyTextureImpl(RE::NiAVObject* a_actor, RE::BGSTextureSet* a_texture) const;
+		void ApplyTextureImpl(RE::NiAVObject* a_actor, RE::BSShaderTextureSet* a_texture, const std::string& a_normal = ""s) const;
 
 	private:
 		RE::BSFixedString name;
 		bool isPrivate;
 
 		std::string bodyTexturePath;
-		RE::BGSTextureSet* textureSetHead;
-		RE::BGSTextureSet* textureSetHeadVampire;
-		RE::BGSTextureSet* textureSetBody;
-		RE::BGSTextureSet* textureSetHands;
+		RE::BSShaderTextureSet* textureSetHead;
+		RE::BSShaderTextureSet* textureSetHeadVampire;
+		RE::BSShaderTextureSet* textureSetBody;
+		RE::BSShaderTextureSet* textureSetHands;
 		std::map<std::string, std::string, StringComparator> headNormals;
 		std::map<std::string, std::string, StringComparator> headNormalsVampire;
 	};

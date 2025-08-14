@@ -14,29 +14,16 @@ namespace DBD
 			name = str.substr(1);
 		}
 		logger::info("Creating texture-set: {}", name);
-
-		const auto factory = RE::IFormFactory::GetConcreteFormFactoryByType<RE::BGSTextureSet>();
-		if (!factory) {
-			throw std::runtime_error("Failed to create factory");
+		textureSetHead = RE::BSShaderTextureSet::Create();
+		textureSetHeadVampire = RE::BSShaderTextureSet::Create();
+		textureSetBody = RE::BSShaderTextureSet::Create();
+		textureSetHands = RE::BSShaderTextureSet::Create();
+		if (!textureSetHead || !textureSetHeadVampire || !textureSetBody || !textureSetHands) {
+			throw std::runtime_error("Failed to create shader texture sets");
 		}
-		const auto createTextureSet = [&](RE::BGSTextureSet*& dest) {
-			dest = factory->Create();
-			if (!dest) {
-				throw std::runtime_error("Failed to create texture set");
-			}
-			dest->flags.set(RE::BGSTextureSet::Flag::kFacegenTextures, RE::BGSTextureSet::Flag::kHasModelSpaceNormalMap);
-		};
-		createTextureSet(textureSetHead);
-		createTextureSet(textureSetHeadVampire);
-		createTextureSet(textureSetBody);
-		createTextureSet(textureSetHands);
-
 		for (auto& directory : fs::directory_iterator{ a_textureFolder }) {
 			if (!directory.is_directory())
 				continue;
-			// subfolders in the texture directory; "male" or "argonianfemale"
-			logger::info("Reading texture sub-folder: {}", directory.path().string());
-
 			if (HasBodyTextures(directory)) {
 				bodyTexturePath = directory.path().filename().string();
 				Util::ToLower(bodyTexturePath);
@@ -59,13 +46,12 @@ namespace DBD
 		return false;
 	}
 
-
 	void TextureProfile::ReadTextureFiles(const fs::directory_entry& a_textureFolder)
 	{
 		for (const auto& file : fs::directory_iterator{ a_textureFolder }) {
 			auto filename = file.path().filename().string();
 			if (!filename.ends_with(".dds")) {
-				continue;  // Skip non-DDS files
+				continue;
 			}
 			logger::info("Reading file: {}", filename);
 			const auto type = GetTextureType(filename);
@@ -93,7 +79,7 @@ namespace DBD
 		for (const auto& file : fs::directory_iterator{ a_textureFolder }) {
 			auto filename = file.path().filename().string();
 			if (!filename.ends_with(".dds")) {
-				continue;  // Skip non-DDS files
+				continue;
 			}
 			logger::info("Reading file: {}", filename);
 			const auto type = GetTextureType(filename);
@@ -112,8 +98,6 @@ namespace DBD
 
 	std::string TextureProfile::GetSubfolderKey(std::string a_path)
 	{
-		Util::ToLower(a_path);
-		// Extract the race from the normal path
 		auto lastSlash = a_path.find_last_of("\\/");
 		if (lastSlash != std::string::npos) {
 			auto prevSlash = a_path.find_last_of("\\/", lastSlash - 1);
@@ -131,8 +115,7 @@ namespace DBD
 		else if (a_file.ends_with("_s.dds"))
 			return Texture::kSpecular;
 		else if (a_file.ends_with("_sk.dds"))
-			return Texture::kDetailMap;
-		// return Texture::kSubsurfaceTint;
+			return Texture::kSubsurfaceTint;
 		else if (a_file.ends_with("map.dds"))
 			return Texture::kHeight;
 		else if (a_file.ends_with(".dds"))
@@ -196,34 +179,30 @@ namespace DBD
 				return VisitControl::kContinue;
 			}
 			const auto material = static_cast<MaterialBase*>(lightingShader->material);
-			if (material->materialAlpha <= 0.0039f) {
-				return VisitControl::kContinue;
-			}
 			std::string normal{ material->textureSet.get()->GetTexturePath(Texture::kNormal) };
-			logger::info("Found texture {}: {}", name, normal);
-			auto raceName = GetSubfolderKey(normal);
-			if (!raceName.empty()) {
-				logger::info("Extracted race: {}", raceName);
-				return VisitControl::kStop;
+			Util::ToLower(normal);
+			if (normal.find("head") != std::string::npos) {
+				logger::info("Found texture {}: {}", name, normal);
+				auto raceName = GetSubfolderKey(normal);
+				if (!raceName.empty()) {
+					logger::info("Extracted race: {}", raceName);
+					return VisitControl::kStop;
+				}
 			}
 			return VisitControl::kContinue;
 		});
 
-		if (raceName.empty()) {
-			const auto actorBase = a_target->GetActorBase();
-			const bool isFemale = actorBase && actorBase->IsFemale();
-			raceName = isFemale ? "female" : "male";
-		}
-
-		auto headNormal = headNormals.at(raceName);
-		RE::BGSTextureSet* appliedTextureSet = nullptr;
-		if (a_target->HasKeywordWithType(RE::DefaultObjectID::kVampireRace))
+		RE::BSShaderTextureSet* appliedTextureSet = nullptr;
+		if (a_target->HasKeywordString("Vampire")) {
 			appliedTextureSet = textureSetHeadVampire;
-		else {
+		} else {
 			appliedTextureSet = textureSetHead;
 		}
-		appliedTextureSet->SetTexturePath(Texture::kNormal, headNormal.c_str());
-		ApplyTextureImpl(headPart, appliedTextureSet);
+		auto headNormal = headNormals.find(raceName);
+		if (headNormal != headNormals.end())
+			ApplyTextureImpl(headPart, appliedTextureSet, headNormal->second);
+		else
+			ApplyTextureImpl(headPart, appliedTextureSet);
 	}
 
 	void TextureProfile::ApplySkinTexture(RE::Actor* a_target) const
@@ -244,7 +223,7 @@ namespace DBD
 		}
 	}
 
-	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, RE::BGSTextureSet* a_texture) const
+	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, RE::BSShaderTextureSet* a_texture, const std::string& a_normal) const
 	{
 		using VisitControl = RE::BSVisit::BSVisitControl;
 
@@ -255,35 +234,34 @@ namespace DBD
 				return VisitControl::kContinue;
 			}
 			const auto material = static_cast<MaterialBase*>(lightingShader->material);
-			if (material->materialAlpha <= 0.0039f) {
-				return VisitControl::kContinue;
-			}
 			auto const feature = material->GetFeature();
 			const auto textureSet = material->textureSet;
 			if (!textureSet || feature != Feature::kFaceGenRGBTint && feature != Feature::kFaceGen)
 				return VisitControl::kContinue;
 			const auto newMaterial = static_cast<MaterialBase*>(material->Create());
 			if (!newMaterial) {
+				logger::error("Failed to create new material for texture application");
 				return VisitControl::kContinue;
 			}
 			newMaterial->CopyMembers(material);
 			newMaterial->ClearTextures();
 
-			if (feature == Feature::kFaceGen) {
-				const auto faceTextureSet = RE::BSShaderTextureSet::Create();
-				if (!faceTextureSet) {
-					logger::error("Failed to create face texture set");
-					return VisitControl::kContinue;
+			const auto materialTexture = RE::BSShaderTextureSet::Create();
+			if (!materialTexture) {
+				logger::error("Failed to create face texture set");
+				return VisitControl::kContinue;
+			}
+			for (size_t i = 0; i < Texture::kTotal; i++) {
+				const auto t = static_cast<Texture>(i);
+				if (t == Texture::kNormal && !a_normal.empty()) {
+					materialTexture->SetTexturePath(t, a_normal.c_str());
+					continue;
 				}
-				for (size_t i = 0; i < Texture::kTotal; i++) {
-					const std::string_view path{ a_texture->GetTexturePath(static_cast<Texture>(i)) };
-					if (path.empty())
-						continue;
-					faceTextureSet->SetTexturePath(static_cast<Texture>(i), path.data());
+				const char* path = a_texture->GetTexturePath(static_cast<Texture>(i));
+				if (path) {
+					materialTexture->SetTexturePath(static_cast<Texture>(i), path);
 				}
-				newMaterial->OnLoadTextureSet(0, faceTextureSet);
-			} else {
-				newMaterial->OnLoadTextureSet(0, a_texture);
+				newMaterial->OnLoadTextureSet(0, materialTexture);
 			}
 
 			lightingShader->SetMaterial(newMaterial, true);
