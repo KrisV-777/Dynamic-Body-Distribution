@@ -246,23 +246,26 @@ namespace DBD
 			newMaterial->CopyMembers(material);
 			newMaterial->ClearTextures();
 
-			const auto materialTexture = RE::BSShaderTextureSet::Create();
-			if (!materialTexture) {
+			const auto materialTexture = material->GetTextureSet();
+			const auto materialTextureNew = RE::BSShaderTextureSet::Create();
+			if (!materialTextureNew) {
 				logger::error("Failed to create face texture set");
 				return VisitControl::kContinue;
 			}
 			for (size_t i = 0; i < Texture::kTotal; i++) {
 				const auto t = static_cast<Texture>(i);
 				if (t == Texture::kNormal && !a_normal.empty()) {
-					materialTexture->SetTexturePath(t, a_normal.c_str());
+					materialTextureNew->SetTexturePath(t, a_normal.c_str());
 					continue;
 				}
-				const char* path = a_texture->GetTexturePath(static_cast<Texture>(i));
+				const char* path = a_texture->GetTexturePath(t);
 				if (path) {
-					materialTexture->SetTexturePath(static_cast<Texture>(i), path);
+					materialTextureNew->SetTexturePath(t, path);
+				} else {
+					materialTextureNew->SetTexturePath(t, materialTexture->GetTexturePath(t));
 				}
-				newMaterial->OnLoadTextureSet(0, materialTexture);
 			}
+			newMaterial->OnLoadTextureSet(0, materialTextureNew);
 
 			lightingShader->SetMaterial(newMaterial, true);
 			lightingShader->SetupGeometry(a_geometry);

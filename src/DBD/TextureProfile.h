@@ -8,14 +8,6 @@ namespace DBD
 		using MaterialBase = RE::BSLightingShaderMaterialBase;
 		using Texture = RE::BSTextureSet::Texture;
 
-		struct StringComparator
-		{
-			bool operator()(const std::string& lhs, const std::string& rhs) const
-			{
-				return strcmp(lhs.data(), rhs.data()) < 0;
-			}
-		};
-
 	public:
 		TextureProfile(const fs::directory_entry& a_textureFolder);
 		~TextureProfile() = default;
