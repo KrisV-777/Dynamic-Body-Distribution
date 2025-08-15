@@ -46,6 +46,13 @@ struct FixedStringComparator
 		return strcmp(lhs.data(), rhs.data()) < 0;
 	}
 };
+struct StringComparator
+{
+	bool operator()(const std::string& lhs, const std::string& rhs) const
+	{
+		return strcmp(lhs.data(), rhs.data()) < 0;
+	}
+};
 
 template <>
 struct std::formatter<RE::BSFixedString> : std::formatter<const char*>
