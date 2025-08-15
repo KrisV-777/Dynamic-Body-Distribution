@@ -1,8 +1,10 @@
 #pragma once
 
+#include "ProfileBase.h"
+
 namespace DBD
 {
-	class TextureProfile
+	class TextureProfile : public ProfileBase
 	{
 		using Feature = RE::BSLightingShaderMaterialBase::Feature;
 		using MaterialBase = RE::BSLightingShaderMaterialBase;
@@ -12,10 +14,8 @@ namespace DBD
 		TextureProfile(const fs::directory_entry& a_textureFolder);
 		~TextureProfile() = default;
 
-		RE::BSFixedString GetName() const { return name; }
-		bool IsApplicable(RE::Actor* a_target) const;
-		void ApplyTexture(RE::Actor* a_target) const;
-		bool IsPrivate() const { return isPrivate; }
+		void Apply(RE::Actor* a_target) const override;
+		bool IsApplicable(RE::Actor* a_target) const override;
 
 	private:
 		void ReadTextureFiles(const fs::directory_entry& a_textureFolder);
@@ -30,9 +30,6 @@ namespace DBD
 		void ApplyTextureImpl(RE::NiAVObject* a_actor, RE::BSShaderTextureSet* a_texture, const std::string& a_normal = ""s) const;
 
 	private:
-		RE::BSFixedString name;
-		bool isPrivate;
-
 		std::string bodyTexturePath;
 		RE::BSShaderTextureSet* textureSetHead;
 		RE::BSShaderTextureSet* textureSetHeadVampire;

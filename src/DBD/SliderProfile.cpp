@@ -4,8 +4,8 @@
 
 namespace DBD
 {
-	SliderProfile::SliderProfile(const std::filesystem::path& a_xmlfilePath) :
-		name(a_xmlfilePath.filename().string()), isPrivate(!name.empty() && name[0] == '.'), transformInterface([]() {
+	SliderProfile::SliderProfile(const std::filesystem::path& a_xmlfilePath, bool a_isMale) :
+		ProfileBase(a_xmlfilePath.filename().string()), isMale(a_isMale), transformInterface([]() {
 			const auto intfc = SKEE::GetInterfaceMap();
 			return intfc ? SKEE::GetBodyMorphInterface(intfc) : nullptr;
 		}())
@@ -60,7 +60,7 @@ namespace DBD
 		}
 	}
 
-	bool SliderProfile::ApplyPreset(RE::Actor* a_target) const
+	void SliderProfile::Apply(RE::Actor* a_target) const
 	{
 		const auto base = a_target->GetActorBase();
 		const auto weight = base ? base->weight / 100.0f : 0.5f;
@@ -71,7 +71,12 @@ namespace DBD
 		}
 		transformInterface->ApplyBodyMorphs(a_target, false);
 		transformInterface->UpdateModelWeight(a_target, true);
-		return true;
+	}
+
+	bool SliderProfile::IsApplicable(RE::Actor* a_target) const
+	{
+		const auto base = a_target->GetActorBase();
+		return base && base->GetSex() == (isMale ? RE::SEX::kMale : RE::SEX::kFemale);
 	}
 
 }  // namespace DBD

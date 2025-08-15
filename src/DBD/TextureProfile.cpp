@@ -5,7 +5,7 @@
 namespace DBD
 {
 	TextureProfile::TextureProfile(const fs::directory_entry& a_textureFolder) :
-		name(a_textureFolder.path().filename().string()), isPrivate(!name.empty() && name[0] == '.')
+		ProfileBase(a_textureFolder.path().filename().string())
 	{
 		if (name.empty()) {
 			throw std::runtime_error("TextureProfile name is empty");
@@ -156,8 +156,10 @@ namespace DBD
 		return raceName == bodyTexturePath;
 	}
 
-	void TextureProfile::ApplyTexture(RE::Actor* a_target) const
+	void TextureProfile::Apply(RE::Actor* a_target) const
 	{
+		a_target->DoReset3D(true);
+		a_target->UpdateSkinColor();
 		ApplyHeadTexture(a_target);
 		ApplySkinTexture(a_target);
 	}
