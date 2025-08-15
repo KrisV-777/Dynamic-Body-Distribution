@@ -23,7 +23,7 @@ option_end()
 
 -- Dependencies & Includes
 -- https://github.com/xmake-io/xmake-repo/tree/dev
-add_requires("yaml-cpp", "frozen", "magic_enum")
+add_requires("yaml-cpp", "frozen", "magic_enum", "rapidxml")
 
 includes("lib/CommonLibVR")
 
@@ -50,7 +50,7 @@ set_config("skyrim_vr", true)
 -- Target
 target(PROJECT_NAME)
     -- Dependencies
-    add_packages("yaml-cpp", "frozen", "magic_enum")
+    add_packages("yaml-cpp", "frozen", "magic_enum", "rapidxml")
 
     -- CommonLibSSE
     add_deps("commonlibsse-ng")
