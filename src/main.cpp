@@ -1,4 +1,5 @@
 #include "DBD/Distribution.h"
+#include "DBD/Hooks/Hooks.h"
 
 inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 {
@@ -13,28 +14,14 @@ inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 	//case SKSE::MessagingInterface::kNewGame:
 	case SKSE::MessagingInterface::kPostLoadGame:
 		{
-			const auto dist = DBD::Distribution::GetSingleton();
-			const auto player = RE::PlayerCharacter::GetSingleton();
-			dist->DistributeTexture(player, "pureskin");
-
-			// auto playerModel = player->Get3D(false);
-
-
-			// auto plbase = player->GetActorBase();
-			// plbase->actorData.actorBaseFlags.set(RE::ACTOR_BASE_DATA::Flag::kFemale);
-			// DBD::Distribution::GetSingleton()->DistributeTexture(player, "pureskin");
-
-			// auto ingrid = RE::TESForm::LookupByID<RE::Actor>(0xAAF9A);
-			// if (ingrid) {
-			// 	auto inbase = ingrid->GetActorBase();
-			// 	DBD::Distribution::GetSingleton()->DistributeTexture(ingrid, "pureskin");
-			// 	[[maybe_unused]] auto in_headdata = inbase->headRelatedData;
-			// 	[[maybe_unused]] auto in_face = inbase->GetHeadPartByType(RE::TESNPC::HeadPartType::kFace);
-			// }
-
-			// [[maybe_unused]] auto pl_headdata = plbase->headRelatedData;
-			// [[maybe_unused]] auto pl_face = plbase->GetHeadPartByType(RE::TESNPC::HeadPartType::kFace);
-			// logger::info("nop");
+			// std::thread([]() {
+			// 	std::this_thread::sleep_for(std::chrono::seconds(5));
+			// 	SKSE::GetTaskInterface()->AddTask([]() {
+			// 		const auto dist = DBD::Distribution::GetSingleton();
+			// 		const auto player = RE::PlayerCharacter::GetSingleton();
+			// 		dist->ApplyProfiles(player);
+			// 	});
+			// }).detach();
 		}
 		break;
 	}
@@ -80,7 +67,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 
 	SKSE::Init(a_skse);
 
-	DBD::Distribution::GetSingleton()->Initialize();
+	DBD::Hooks::Install();
 
 	const auto msging = SKSE::GetMessagingInterface();
 	if (!msging->RegisterListener("SKSE", SKSEMessageHandler)) {
