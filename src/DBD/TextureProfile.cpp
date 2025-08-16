@@ -185,7 +185,7 @@ namespace DBD
 			Util::ToLower(normal);
 			if (normal.find("head") != std::string::npos) {
 				logger::info("Found texture {}: {}", name, normal);
-				auto raceName = GetSubfolderKey(normal);
+				raceName = GetSubfolderKey(normal);
 				if (!raceName.empty()) {
 					logger::info("Extracted race: {}", raceName);
 					return VisitControl::kStop;
