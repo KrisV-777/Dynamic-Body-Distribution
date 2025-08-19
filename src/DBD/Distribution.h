@@ -8,6 +8,7 @@ namespace DBD
 {
 	class Distribution :
 		public Singleton<Distribution>
+	// public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
 	{
 		static constexpr const char* TEXTURE_ROOT_PATH{ "Data\\Textures\\DBD" };
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
@@ -48,6 +49,9 @@ namespace DBD
 		int32_t ApplyProfiles(RE::Actor* a_target);
 		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId) const;
 		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId) const;
+
+		// protected:
+		// RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*) override;
 
 	private:
 		void LoadTextureProfiles();

@@ -9,6 +9,9 @@ namespace DBD
 		using Feature = RE::BSLightingShaderMaterialBase::Feature;
 		using MaterialBase = RE::BSLightingShaderMaterialBase;
 		using Texture = RE::BSTextureSet::Texture;
+		using TextureData = std::array<std::string, Texture::kTotal>;
+
+		static constexpr std::string_view PATH_PREFIX_CUT{ "data/textures/"sv };
 
 	public:
 		TextureProfile(const fs::directory_entry& a_textureFolder);
@@ -27,14 +30,14 @@ namespace DBD
 
 		void ApplyHeadTexture(RE::Actor* a_target) const;
 		void ApplySkinTexture(RE::Actor* a_target) const;
-		void ApplyTextureImpl(RE::NiAVObject* a_object, RE::BSShaderTextureSet* a_texture, const std::string& a_normal = ""s) const;
+		void ApplyTextureImpl(RE::NiAVObject* a_object, const TextureData& a_texture, const std::string& a_normal = ""s) const;
 
 	private:
 		std::string bodyTexturePath;
-		RE::BSShaderTextureSet* textureSetHead;
-		RE::BSShaderTextureSet* textureSetHeadVampire;
-		RE::BSShaderTextureSet* textureSetBody;
-		RE::BSShaderTextureSet* textureSetHands;
+		TextureData textureSetHead;
+		TextureData textureSetHeadVampire;
+		TextureData textureSetBody;
+		TextureData textureSetHands;
 		std::map<std::string, std::string, StringComparator> headNormals;
 		std::map<std::string, std::string, StringComparator> headNormalsVampire;
 	};

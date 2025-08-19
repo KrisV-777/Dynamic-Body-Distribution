@@ -7,22 +7,10 @@ inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 	case SKSE::MessagingInterface::kSaveGame:
 		break;
 	case SKSE::MessagingInterface::kDataLoaded:
-		{
-			DBD::Distribution::GetSingleton()->Initialize();
-		}
+		DBD::Distribution::GetSingleton()->Initialize();
 		break;
-	//case SKSE::MessagingInterface::kNewGame:
+	case SKSE::MessagingInterface::kNewGame:
 	case SKSE::MessagingInterface::kPostLoadGame:
-		{
-			// std::thread([]() {
-			// 	std::this_thread::sleep_for(std::chrono::seconds(5));
-			// 	SKSE::GetTaskInterface()->AddTask([]() {
-			// 		const auto dist = DBD::Distribution::GetSingleton();
-			// 		const auto player = RE::PlayerCharacter::GetSingleton();
-			// 		dist->ApplyProfiles(player);
-			// 	});
-			// }).detach();
-		}
 		break;
 	}
 }

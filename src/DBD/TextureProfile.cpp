@@ -14,13 +14,6 @@ namespace DBD
 			name = str.substr(1);
 		}
 		logger::info("Creating texture-set: {}", name);
-		textureSetHead = RE::BSShaderTextureSet::Create();
-		textureSetHeadVampire = RE::BSShaderTextureSet::Create();
-		textureSetBody = RE::BSShaderTextureSet::Create();
-		textureSetHands = RE::BSShaderTextureSet::Create();
-		if (!textureSetHead || !textureSetHeadVampire || !textureSetBody || !textureSetHands) {
-			throw std::runtime_error("Failed to create shader texture sets");
-		}
 		for (auto& directory : fs::directory_iterator{ a_textureFolder }) {
 			if (!directory.is_directory())
 				continue;
@@ -60,15 +53,18 @@ namespace DBD
 				continue;
 			}
 			Util::ToLower(filename);
+			const auto path = file.path().string();
+			const auto cutPath = path.substr(PATH_PREFIX_CUT.size());
+			const auto cutPathCStr = cutPath.c_str();
 			if (filename.find("body") != std::string::npos) {
-				textureSetBody->SetTexturePath(*type, file.path().string().c_str());
+				textureSetBody[*type] = cutPathCStr;
 			} else if (filename.find("hand") != std::string::npos) {
-				textureSetHands->SetTexturePath(*type, file.path().string().c_str());
+				textureSetHands[*type] = cutPathCStr;
 			} else if (filename.find("headvampire") != std::string::npos) {
-				textureSetHeadVampire->SetTexturePath(*type, file.path().string().c_str());
+				textureSetHeadVampire[*type] = cutPathCStr;
 			} else if (filename.find("head") != std::string::npos) {
-				textureSetHead->SetTexturePath(*type, file.path().string().c_str());
-				textureSetHeadVampire->SetTexturePath(*type, file.path().string().c_str());
+				textureSetHead[*type] = cutPathCStr;
+				textureSetHeadVampire[*type] = cutPathCStr;
 			}
 		}
 	}
@@ -158,10 +154,12 @@ namespace DBD
 
 	void TextureProfile::Apply(RE::Actor* a_target) const
 	{
+		assert(a_target);
 		a_target->DoReset3D(true);
 		a_target->UpdateSkinColor();
-		ApplyHeadTexture(a_target);
 		ApplySkinTexture(a_target);
+		ApplyHeadTexture(a_target);
+		a_target->Update3DModel();
 	}
 
 	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
@@ -194,38 +192,91 @@ namespace DBD
 			return VisitControl::kContinue;
 		});
 
-		RE::BSShaderTextureSet* appliedTextureSet = nullptr;
-		if (a_target->HasKeywordString("Vampire")) {
-			appliedTextureSet = textureSetHeadVampire;
-		} else {
-			appliedTextureSet = textureSetHead;
-		}
-		auto headNormal = headNormals.find(raceName);
-		if (headNormal != headNormals.end())
+		const auto& appliedTextureSet = a_target->HasKeywordString("Vampire") ? textureSetHeadVampire : textureSetHead;
+		if (auto headNormal = headNormals.find(raceName); headNormal != headNormals.end()) {
 			ApplyTextureImpl(headPart, appliedTextureSet, headNormal->second);
-		else
+		} else {
 			ApplyTextureImpl(headPart, appliedTextureSet);
+		}
 	}
 
 	void TextureProfile::ApplySkinTexture(RE::Actor* a_target) const
 	{
 		const auto skin = a_target->GetSkin();
 		if (!skin) {
-			const auto errMsg = std::format("Actor {} has no skin", a_target->GetName());
-			throw std::runtime_error(errMsg);
+			logger::error("Load3DPlayer: No skin found for Character: {}", a_target->formID);
+			return;
 		}
-		for (auto&& arma : skin->armorAddons) {
-			a_target->VisitArmorAddon(skin, arma, [&](bool, RE::NiAVObject& a_obj) {
-				if (arma->HasPartOf(RE::BGSBipedObjectForm::BipedObjectSlot::kHands)) {
-					ApplyTextureImpl(&a_obj, textureSetHands);
+
+		const auto factory = RE::IFormFactory::GetConcreteFormFactoryByType<RE::TESObjectARMO>();
+		const auto factoryARMA = RE::IFormFactory::GetConcreteFormFactoryByType<RE::TESObjectARMA>();
+		const auto factoryTexture = RE::IFormFactory::GetConcreteFormFactoryByType<RE::BGSTextureSet>();
+		auto newSkin = factory ? factory->Create() : nullptr;
+		if (!newSkin || !factoryARMA || !factoryTexture) {
+			logger::error("Load3DPlayer: Failed to create duplicate skin for Character: {}", a_target->formID);
+			return;
+		}
+		newSkin->Copy(skin);
+
+		const auto base = a_target->GetActorBase();
+		if (!base) {
+			logger::error("Load3DPlayer: No ActorBase found for Character: {}", a_target->formID);
+			return;
+		}
+		const auto sex = base->GetSex();
+		const auto race = base->GetRace();
+
+		const auto applyOverwrite = [&](RE::TESObjectARMA*& sourceArma, const TextureData& a_texture) {
+			auto& armaTextures = sourceArma->skinTextures[sex];
+			auto newArma = factoryARMA->Create();
+			if (!newArma || !armaTextures) {
+				logger::error("Load3DPlayer: Failed to create duplicate body for ArmorAddon: {}", sourceArma->formID);
+				return;
+			}
+			newArma->data = sourceArma->data;
+			newArma->race = sourceArma->race;
+			newArma->bipedModel1stPersons[RE::SEX::kMale] = sourceArma->bipedModel1stPersons[RE::SEX::kMale];
+			newArma->bipedModel1stPersons[RE::SEX::kFemale] = sourceArma->bipedModel1stPersons[RE::SEX::kFemale];
+			newArma->bipedModels[RE::SEX::kMale] = sourceArma->bipedModels[RE::SEX::kMale];
+			newArma->bipedModels[RE::SEX::kFemale] = sourceArma->bipedModels[RE::SEX::kFemale];
+			newArma->skinTextures[RE::SEX::kMale] = sourceArma->skinTextures[RE::SEX::kMale];
+			newArma->skinTextures[RE::SEX::kFemale] = sourceArma->skinTextures[RE::SEX::kFemale];
+			newArma->bipedModelData = sourceArma->bipedModelData;
+			newArma->additionalRaces = sourceArma->additionalRaces;
+			newArma->footstepSet = sourceArma->footstepSet;
+			const auto newTexture = factoryTexture->Create();
+			if (!newTexture) {
+				logger::error("Load3DPlayer: Failed to create duplicate texture for ArmorAddon: {}", sourceArma->formID);
+				return;
+			}
+			newTexture->flags = armaTextures->flags;
+			using Texture = RE::BSTextureSet::Texture;
+			for (size_t i = 0; i < Texture::kTotal; i++) {
+				const auto t = static_cast<Texture>(i);
+				if (const char* path = a_texture[t].data()) {
+					newTexture->SetTexturePath(t, path);
 				} else {
-					ApplyTextureImpl(&a_obj, textureSetBody);
+					newTexture->SetTexturePath(t, armaTextures->GetTexturePath(t));
 				}
-			});
+			}
+			newArma->skinTextures[sex] = newTexture;
+			sourceArma = newArma;
+		};
+
+		using SlotMask = RE::BGSBipedObjectForm::BipedObjectSlot;
+		for (auto& arma : newSkin->armorAddons) {
+			if (!arma || !arma->IsValidRace(race)) {
+				continue;
+			} else if (arma->HasPartOf(SlotMask::kBody) || arma->HasPartOf(SlotMask::kFeet) || arma->HasPartOf(SlotMask::kTail)) {
+				applyOverwrite(arma, textureSetBody);
+			} else if (arma->HasPartOf(SlotMask::kHands)) {
+				applyOverwrite(arma, textureSetHands);
+			}
 		}
+		base->skin = newSkin;
 	}
 
-	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, RE::BSShaderTextureSet* a_texture, const std::string& a_normal) const
+	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, const TextureData& a_texture, const std::string& a_normal) const
 	{
 		using VisitControl = RE::BSVisit::BSVisitControl;
 
@@ -254,17 +305,18 @@ namespace DBD
 				logger::error("Failed to create face texture set");
 				return VisitControl::kContinue;
 			}
+			bool checkOldOnly = false;
 			for (size_t i = 0; i < Texture::kTotal; i++) {
 				const auto t = static_cast<Texture>(i);
 				if (t == Texture::kNormal && !a_normal.empty()) {
 					materialTextureNew->SetTexturePath(t, a_normal.c_str());
 					continue;
 				}
-				const char* path = a_texture->GetTexturePath(t);
-				if (path) {
-					materialTextureNew->SetTexturePath(t, path);
+				if (!checkOldOnly && !a_texture[t].empty()) {
+					materialTextureNew->SetTexturePath(t, a_texture[t].data());
 				} else {
-					materialTextureNew->SetTexturePath(t, materialTexture->GetTexturePath(t));
+					const auto path = materialTexture->GetTexturePath(t);
+					materialTextureNew->SetTexturePath(t, path);
 				}
 			}
 			newMaterial->OnLoadTextureSet(0, materialTextureNew);

@@ -12,7 +12,30 @@ namespace DBD
 		LoadTextureProfiles();
 		LoadSliderProfiles();
 		LoadConditions();
+
+		// auto* const scriptEvents = RE::ScriptEventSourceHolder::GetSingleton();
+		// scriptEvents->AddEventSink<RE::TESCellAttachDetachEvent>(this);
 	}
+
+	// RE::BSEventNotifyControl Distribution::ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
+	// {
+	// 	if (a_event && a_event->attached && a_event->reference) {
+	// 		const auto& ref = a_event->reference;
+	// 		if (ref->Is(RE::FormType::ActorCharacter) && ref->HasKeywordByEditorID("ActorTypeNPC")) {
+	// 			std::thread([ref]() {
+	// 				std::this_thread::sleep_for(5s);
+	// 				SKSE::GetTaskInterface()->AddTask([ref]() {
+	// 					const auto dist = Distribution::GetSingleton();
+	// 					const auto actor = ref->As<RE::Actor>();
+	// 					if (actor && actor->Is3DLoaded()) {
+	// 						dist->ApplyProfiles(actor);
+	// 					}
+	// 				});
+	// 			}).detach();
+	// 		}
+	// 	}
+	// 	return RE::BSEventNotifyControl::kContinue;
+	// }
 
 	int32_t Distribution::ApplyProfiles(RE::Actor* a_target)
 	{
