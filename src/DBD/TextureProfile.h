@@ -27,7 +27,7 @@ namespace DBD
 
 		void ApplyHeadTexture(RE::Actor* a_target) const;
 		void ApplySkinTexture(RE::Actor* a_target) const;
-		void ApplyTextureImpl(RE::NiAVObject* a_actor, RE::BSShaderTextureSet* a_texture, const std::string& a_normal = ""s) const;
+		void ApplyTextureImpl(RE::NiAVObject* a_object, RE::BSShaderTextureSet* a_texture, const std::string& a_normal = ""s) const;
 
 	private:
 		std::string bodyTexturePath;
