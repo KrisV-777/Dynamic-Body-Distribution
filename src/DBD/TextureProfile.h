@@ -21,11 +21,11 @@ namespace DBD
 		void Apply(RE::Actor* a_target) const override;
 		bool IsApplicable(RE::Actor* a_target) const override;
 
-	private:
-		static std::string GetSubfolderKey(std::string a_path);
-
 		void ApplyHeadTexture(RE::Actor* a_target) const;
 		void ApplySkinTexture(RE::Actor* a_target) const;
+
+	private:
+		static std::string GetSubfolderKey(std::string a_path);
 		void ApplyTextureImpl(RE::NiAVObject* a_object, const std::string& a_normal = ""s) const;
 
 	private:

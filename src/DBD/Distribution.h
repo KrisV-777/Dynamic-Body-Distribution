@@ -42,7 +42,8 @@ namespace DBD
 			MatchLevel GetApplicationLevel(RE::Actor* a_target) const;
 		};
 
-		enum CacheIndex
+	public:
+		enum ProfileIndex
 		{
 			TextureId,
 			SliderId,
@@ -50,13 +51,12 @@ namespace DBD
 			Total_V1,
 			Total = Total_V1
 		};
+		using ProfileArray = std::array<ProfileBase*, ProfileIndex::Total>;
 
 	public:
 		void Initialize();
 
-		int32_t ApplyProfiles(RE::Actor* a_target);
-		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId);
-		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId);
+		ProfileArray SelectProfiles(RE::Actor* a_target);
 
 	public:
 		void Save(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
@@ -64,7 +64,8 @@ namespace DBD
 		void Revert(SKSE::SerializationInterface* a_intfc);
 
 	private:
-		static bool ApplyProfile(RE::Actor* a_target, const ProfileBase& a_profile);
+		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId);
+		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId);
 
 		void LoadTextureProfiles();
 		void LoadSliderProfiles();
@@ -75,7 +76,7 @@ namespace DBD
 		std::map<RE::BSFixedString, TextureProfile, FixedStringComparator> textures;
 		std::map<RE::BSFixedString, SliderProfile, FixedStringComparator> sliders;
 
-		std::map<RE::FormID, std::array<RE::BSFixedString, CacheIndex::Total>> cache;  // <textureId, sliderId>
+		std::map<RE::FormID, ProfileArray> cache;  // <textureId, sliderId>
 	};
 
 }  // namespace DBD

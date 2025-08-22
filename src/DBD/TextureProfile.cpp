@@ -90,13 +90,9 @@ namespace DBD
 		return false;
 	}
 
-	void TextureProfile::Apply(RE::Actor* a_target) const
+	void TextureProfile::Apply(RE::Actor*) const
 	{
-		assert(a_target);
-		ApplySkinTexture(a_target);
-		a_target->DoReset3D(true);
-		a_target->UpdateSkinColor();
-		ApplyHeadTexture(a_target);
+		throw std::runtime_error("Apply method not implemented for TextureProfiles.");
 	}
 
 	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
@@ -104,7 +100,9 @@ namespace DBD
 		const auto headPart = a_target->GetHeadPartObject(RE::BGSHeadPart::HeadPartType::kFace);
 		if (!headPart) {
 			const auto errMsg = std::format("Actor {} has no head part", a_target->GetName());
-			throw std::runtime_error(errMsg);
+			// throw std::runtime_error(errMsg);
+			logger::error("{}", errMsg);
+			return;
 		}
 
 		std::string raceName{ "" };
@@ -207,8 +205,9 @@ namespace DBD
 		base->skin = newSkin;
 	}
 
-	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, const std::string& a_normal) const
+	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, const std::string& a_normalPath) const
 	{
+		const auto normalFile = fs::path(a_normalPath).filename().string();
 		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) -> VisitControl {
 			const auto effect = a_geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect];
 			const auto lightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect.get());
@@ -234,18 +233,18 @@ namespace DBD
 			const auto materialTexture = material->GetTextureSet();
 			const auto materialTextureNew = RE::BSShaderTextureSet::Create();
 			if (!materialTextureNew) {
-				logger::error("Failed to create face texture set");
+				logger::error("Failed to create texture set");
 				return VisitControl::kContinue;
 			}
 			for (size_t i = 0; i < Texture::kTotal; i++) {
 				const auto t = static_cast<Texture>(i);
-				if (t == Texture::kNormal && !a_normal.empty()) {
-					materialTextureNew->SetTexturePath(t, a_normal.c_str());
-					continue;
-				}
 				const char* pathCStr = materialTexture->GetTexturePath(t);
 				const std::string_view path{ pathCStr ? pathCStr : ""sv };
 				const auto filename = fs::path(path).filename().string();
+				if (t == Texture::kNormal && !a_normalPath.empty() && filename == normalFile) {
+					materialTextureNew->SetTexturePath(t, a_normalPath.c_str());
+					continue;
+				}
 				const auto it = textures.find(filename);
 				if (it == textures.end()) {
 					materialTextureNew->SetTexturePath(t, pathCStr);

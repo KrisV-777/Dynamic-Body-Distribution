@@ -14,21 +14,22 @@ namespace DBD
 		LoadConditions();
 	}
 
-	int32_t Distribution::ApplyProfiles(RE::Actor* a_target)
+	Distribution::ProfileArray Distribution::SelectProfiles(RE::Actor* a_target)
 	{
-		bool textureApplied = false, sliderApplied = false;
+		ProfileArray selectedProfiles{};
+
 		const auto cacheIt = cache.find(a_target->formID);
 		if (cacheIt != cache.end()) {
-			const auto& cached = cacheIt->second;
-			textureApplied = cached[CacheIndex::TextureId] != "" && ApplyTextureProfile(a_target, cached[CacheIndex::TextureId]);
-			sliderApplied = cached[CacheIndex::SliderId] != "" && ApplySliderProfile(a_target, cached[CacheIndex::SliderId]);
+			selectedProfiles = cacheIt->second;
 		}
 
-		auto tryApply = [&](auto& profiles, auto fn) {
+		auto trySelect = [&](auto& profiles, auto idx) {
+			if (selectedProfiles[idx] != nullptr)
+				return true;
 			Random::shuffle(profiles);
 			for (auto* p : profiles)
-				if (p->IsApplicable(a_target) && fn(a_target, p->GetName()))
-					return true;
+				if (p->IsApplicable(a_target))
+					return selectedProfiles[idx] = p, true;
 			return false;
 		};
 
@@ -41,25 +42,30 @@ namespace DBD
 				wildcards.push_back(&cfg);
 				break;
 			default:
-				textureApplied |= tryApply(cfg.textures, [this](auto* t, auto n) { return ApplyTextureProfile(t, n); });
-				sliderApplied |= tryApply(cfg.sliders, [this](auto* t, auto n) { return ApplySliderProfile(t, n); });
+				trySelect(cfg.textures, ProfileIndex::TextureId);
+				trySelect(cfg.sliders, ProfileIndex::SliderId);
 			}
 		}
-		if (textureApplied && sliderApplied)
-			return 2;
+
 		Random::shuffle(wildcards);
-		for (auto* cfg : wildcards) {
-			textureApplied |= tryApply(cfg->textures, [this](auto* t, auto n) { return ApplyTextureProfile(t, n); });
-			sliderApplied |= tryApply(cfg->sliders, [this](auto* t, auto n) { return ApplySliderProfile(t, n); });
+		while (!wildcards.empty() && std::ranges::find(selectedProfiles, nullptr) != selectedProfiles.end()) {
+			auto* cfg = wildcards.back();
+			wildcards.pop_back();
+			trySelect(cfg->textures, ProfileIndex::TextureId);
+			trySelect(cfg->sliders, ProfileIndex::SliderId);
 		}
-		return textureApplied + sliderApplied;
+
+		cache[a_target->formID] = selectedProfiles;
+		return selectedProfiles;
 	}
 
 	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId)
 	{
 		auto it = textures.find(a_textureId);
-		if (it != textures.end() && ApplyProfile(a_target, it->second)) {
-			cache[a_target->formID][CacheIndex::TextureId] = a_textureId;
+		if (it != textures.end() && it->second.IsApplicable(a_target)) {
+			cache[a_target->formID][ProfileIndex::TextureId] = &it->second;
+			a_target->DoReset3D(false);
+			return true;
 		}
 		return false;
 	}
@@ -67,16 +73,10 @@ namespace DBD
 	bool Distribution::ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId)
 	{
 		auto it = sliders.find(a_sliderId);
-		if (it != sliders.end() && ApplyProfile(a_target, it->second)) {
-			cache[a_target->formID][CacheIndex::SliderId] = a_sliderId;
-		}
-		return false;
-	}
-
-	bool Distribution::ApplyProfile(RE::Actor* a_target, const ProfileBase& a_profile)
-	{
-		if (a_profile.IsApplicable(a_target)) {
-			return a_profile.Apply(a_target), true;
+		if (it != sliders.end() && it->second.IsApplicable(a_target)) {
+			cache[a_target->formID][ProfileIndex::SliderId] = &it->second;
+			a_target->DoReset3D(true);
+			return true;
 		}
 		return false;
 	}
@@ -266,9 +266,9 @@ namespace DBD
 				continue;
 			}
 			// COMEBACK: If version ever gets a value != 1, update index max here
-			for (size_t i = 0; i < CacheIndex::Total_V1; i++) {
-				if (!stl::write_string(a_intfc, data[i])) {
-					logger::error("Failed to save reg ({})", data[i].data());
+			for (size_t i = 0; i < ProfileIndex::Total_V1; i++) {
+				if (!stl::write_string(a_intfc, data[i]->GetName())) {
+					logger::error("Failed to save reg ({})", data[i]->GetName().data());
 					continue;
 				}
 			}
@@ -286,17 +286,35 @@ namespace DBD
 		for (size_t i = 0; i < numRegs; i++) {
 			a_intfc->ReadRecordData(formID);
 			if (!a_intfc->ResolveFormID(formID, formID)) {
-				logger::warn("Error reading formID ({:X})", formID);
+				logger::warn("Error reading formID: {:X}", formID);
 				continue;
 			}
 			auto& cacheEntry = cache[formID];
 			// COMEBACK: If version ever gets a value != 1, update index max here
-			for (size_t n = 0; n < CacheIndex::Total_V1; n++) {
+			for (size_t n = 0; n < ProfileIndex::Total_V1; n++) {
 				if (!stl::read_string(a_intfc, cacheValue)) {
-					logger::error("Failed to load reg ({})", cacheValue);
+					logger::error("Failed to load reg: {}", cacheValue);
 					continue;
 				}
-				cacheEntry[n] = cacheValue;
+				auto assignProfile = [&]<class T>(T& profiles) {
+					auto it = profiles.find(cacheValue);
+					if (it != profiles.end()) {
+						cacheEntry[n] = &it->second;
+					} else {
+						logger::error("Failed to load profile: {}", cacheValue);
+					}
+				};
+				switch (n) {
+				case ProfileIndex::SliderId:
+					assignProfile(sliders);
+					break;
+				case ProfileIndex::TextureId:
+					assignProfile(textures);
+					break;
+				default:
+					logger::warn("Unknown ProfileIndex: {}", n);
+					break;
+				}
 			}
 		}
 		logger::info("Loaded {} cache entries", cache.size());
