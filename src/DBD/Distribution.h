@@ -47,7 +47,8 @@ namespace DBD
 			TextureId,
 			SliderId,
 
-			Total
+			Total_V1,
+			Total = Total_V1
 		};
 
 	public:
@@ -56,6 +57,11 @@ namespace DBD
 		int32_t ApplyProfiles(RE::Actor* a_target);
 		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId);
 		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId);
+
+	public:
+		void Save(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
+		void Load(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
+		void Revert(SKSE::SerializationInterface* a_intfc);
 
 	private:
 		static bool ApplyProfile(RE::Actor* a_target, const ProfileBase& a_profile);

@@ -27,16 +27,25 @@ namespace stl
 {
 	using namespace SKSE::stl;
 
-#ifdef IS_PRE_AE
-	constexpr std::uint32_t version_pack(REL::Version a_version) noexcept
+	inline bool read_string(SKSE::SerializationInterface* a_intfc, std::string& a_str)
 	{
-		return static_cast<std::uint32_t>(
-			(a_version[0] & 0x0FF) << 24u |
-			(a_version[1] & 0x0FF) << 16u |
-			(a_version[2] & 0xFFF) << 4u |
-			(a_version[3] & 0x00F) << 0u);
+		std::size_t size = 0;
+		if (!a_intfc->ReadRecordData(size)) {
+			return false;
+		}
+		a_str.reserve(size);
+		if (!a_intfc->ReadRecordData(a_str.data(), static_cast<std::uint32_t>(size))) {
+			return false;
+		}
+		return true;
 	}
-#endif
+
+	template <class S>
+	inline bool write_string(SKSE::SerializationInterface* a_intfc, const S& a_str)
+	{
+		std::size_t size = a_str.length() + 1;
+		return a_intfc->WriteRecordData(size) && a_intfc->WriteRecordData(a_str.data(), static_cast<std::uint32_t>(size));
+	}
 }
 
 struct FixedStringComparator

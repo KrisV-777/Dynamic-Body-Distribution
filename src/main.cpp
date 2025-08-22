@@ -1,5 +1,6 @@
 #include "DBD/Distribution.h"
 #include "DBD/Hooks/Hooks.h"
+#include "DBD/Serialization.h"
 
 inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 {
@@ -62,6 +63,13 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 		logger::critical("Failed to register Listener");
 		return false;
 	}
+
+	const auto serialization = SKSE::GetSerializationInterface();
+	serialization->SetUniqueID('dbd');
+	serialization->SetSaveCallback(DBD::Serialize::SaveCallback);
+	serialization->SetLoadCallback(DBD::Serialize::LoadCallback);
+	serialization->SetRevertCallback(DBD::Serialize::RevertCallback);
+	serialization->SetFormDeleteCallback(DBD::Serialize::FormDeleteCallback);
 
 	logger::info("{} loaded"sv, plugin->GetName());
 

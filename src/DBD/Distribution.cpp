@@ -253,4 +253,58 @@ namespace DBD
 		return MatchLevel::None;
 	}
 
+	void Distribution::Save(SKSE::SerializationInterface* a_intfc, uint32_t)
+	{
+		const std::size_t numRegs = cache.size();
+		if (!a_intfc->WriteRecordData(numRegs)) {
+			logger::error("Failed to save number of regs ({})", numRegs);
+			return;
+		}
+		for (auto&& [formID, data] : cache) {
+			if (!a_intfc->WriteRecordData(formID)) {
+				logger::error("Failed to save reg ({:X})", formID);
+				continue;
+			}
+			// COMEBACK: If version ever gets a value != 1, update index max here
+			for (size_t i = 0; i < CacheIndex::Total_V1; i++) {
+				if (!stl::write_string(a_intfc, data[i])) {
+					logger::error("Failed to save reg ({})", data[i].data());
+					continue;
+				}
+			}
+		}
+	}
+
+	void Distribution::Load(SKSE::SerializationInterface* a_intfc, uint32_t)
+	{
+		cache.clear();
+		size_t numRegs;
+		a_intfc->ReadRecordData(numRegs);
+
+		RE::FormID formID;
+		std::string cacheValue;
+		for (size_t i = 0; i < numRegs; i++) {
+			a_intfc->ReadRecordData(formID);
+			if (!a_intfc->ResolveFormID(formID, formID)) {
+				logger::warn("Error reading formID ({:X})", formID);
+				continue;
+			}
+			auto& cacheEntry = cache[formID];
+			// COMEBACK: If version ever gets a value != 1, update index max here
+			for (size_t n = 0; n < CacheIndex::Total_V1; n++) {
+				if (!stl::read_string(a_intfc, cacheValue)) {
+					logger::error("Failed to load reg ({})", cacheValue);
+					continue;
+				}
+				cacheEntry[n] = cacheValue;
+			}
+		}
+		logger::info("Loaded {} cache entries", cache.size());
+	}
+
+	void Distribution::Revert(SKSE::SerializationInterface*)
+	{
+		cache.clear();
+	}
+
 }  // namespace DBD
