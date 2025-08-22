@@ -67,6 +67,10 @@ namespace DBD
 
 	bool SliderProfile::IsApplicable(RE::Actor* a_target) const
 	{
+		const auto race = a_target->GetRace();
+		if (!race || !race->HasKeywordString("ActorTypeNPC")) {
+			return false;
+		}
 		const auto base = a_target->GetActorBase();
 		return base && base->GetSex() == (isMale ? RE::SEX::kMale : RE::SEX::kFemale);
 	}
