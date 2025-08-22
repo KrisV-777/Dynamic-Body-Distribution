@@ -64,8 +64,8 @@ namespace DBD
 		void Revert(SKSE::SerializationInterface* a_intfc);
 
 	private:
-		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId);
-		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId);
+		bool ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId);
+		bool ApplySliderProfile(RE::Actor* a_target, const std::string& a_sliderId);
 
 		void LoadTextureProfiles();
 		void LoadSliderProfiles();
@@ -73,8 +73,8 @@ namespace DBD
 
 	private:
 		std::vector<DistributionConfig> configurations;
-		std::map<RE::BSFixedString, TextureProfile, FixedStringComparator> textures;
-		std::map<RE::BSFixedString, SliderProfile, FixedStringComparator> sliders;
+		std::map<std::string, TextureProfile, StringComparator> textures;
+		std::map<std::string, SliderProfile, StringComparator> sliders;
 
 		std::map<RE::FormID, ProfileArray> cache;  // <textureId, sliderId>
 	};

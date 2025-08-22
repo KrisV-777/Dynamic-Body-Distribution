@@ -48,13 +48,6 @@ namespace stl
 	}
 }
 
-struct FixedStringComparator
-{
-	bool operator()(const RE::BSFixedString& lhs, const RE::BSFixedString& rhs) const
-	{
-		return _stricmp(lhs.c_str(), rhs.c_str()) < 0;
-	}
-};
 struct StringComparator
 {
 	bool operator()(const std::string& lhs, const std::string& rhs) const

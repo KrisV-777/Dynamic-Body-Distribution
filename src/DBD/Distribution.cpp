@@ -59,7 +59,7 @@ namespace DBD
 		return selectedProfiles;
 	}
 
-	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId)
+	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId)
 	{
 		auto it = textures.find(a_textureId);
 		if (it != textures.end() && it->second.IsApplicable(a_target)) {
@@ -70,7 +70,7 @@ namespace DBD
 		return false;
 	}
 
-	bool Distribution::ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId)
+	bool Distribution::ApplySliderProfile(RE::Actor* a_target, const std::string& a_sliderId)
 	{
 		auto it = sliders.find(a_sliderId);
 		if (it != sliders.end() && it->second.IsApplicable(a_target)) {
@@ -181,7 +181,7 @@ namespace DBD
 					parseFormList(target["Race"], configuration.races);
 				}
 
-				auto parseProfileList = [&]<class T>(const YAML::Node& node, std::vector<ProfileBase*>& out, const std::map<RE::BSFixedString, T, FixedStringComparator>& source) -> bool {
+				auto parseProfileList = [&]<class T>(const YAML::Node& node, std::vector<ProfileBase*>& out, const std::map<std::string, T, StringComparator>& source) -> bool {
 					if (!node || !node.IsSequence()) {
 						return false;
 					}
