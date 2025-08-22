@@ -11,77 +11,39 @@ namespace DBD
 		for (auto& directory : fs::directory_iterator{ a_textureFolder }) {
 			if (!directory.is_directory())
 				continue;
-			if (HasBodyTextures(directory)) {
-				bodyTexturePath = directory.path().filename().string();
-				Util::ToLower(bodyTexturePath);
-				ReadTextureFiles(directory);
-			} else {
-				ReadTextureFilesExtra(directory);
+			const auto isBodyTextureFolder = std::ranges::any_of(
+				fs::directory_iterator{ directory }, [](const auto& file) {
+					auto filename = Util::CastLower(file.path().filename().string());
+					return filename.find("body") != std::string::npos;
+				});
+			if (isBodyTextureFolder) {
+				const auto rootPath = directory.path().filename().string();
+				if (!textureRoot.empty()) {
+					const auto err = std::format("Found multiple body texture directories: {} and {}", textureRoot, rootPath);
+					throw std::runtime_error(err);
+				}
+				textureRoot = rootPath;
 			}
-		}
-	}
-
-	bool TextureProfile::HasBodyTextures(const fs::directory_entry& a_textureFolder)
-	{
-		for (const auto& file : fs::directory_iterator{ a_textureFolder }) {
-			auto filename = file.path().filename().string();
-			Util::ToLower(filename);
-			if (filename.find("body") != std::string::npos) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	void TextureProfile::ReadTextureFiles(const fs::directory_entry& a_textureFolder)
-	{
-		for (const auto& file : fs::directory_iterator{ a_textureFolder }) {
-			auto filename = file.path().filename().string();
-			if (!filename.ends_with(".dds")) {
-				continue;
-			}
-			logger::info("Reading file: {}", filename);
-			const auto type = GetTextureType(filename);
-			if (!type) {
-				logger::error("Unrecognized texture type for file: {}", filename);
-				continue;
-			}
-			Util::ToLower(filename);
-			const auto path = file.path().string();
-			const auto cutPath = path.substr(PATH_PREFIX_CUT.size());
-			const auto cutPathCStr = cutPath.c_str();
-			if (filename.find("body") != std::string::npos) {
-				textureSetBody[*type] = cutPathCStr;
-			} else if (filename.find("hand") != std::string::npos) {
-				textureSetHands[*type] = cutPathCStr;
-			} else if (filename.find("headvampire") != std::string::npos) {
-				textureSetHeadVampire[*type] = cutPathCStr;
-			} else if (filename.find("head") != std::string::npos) {
-				textureSetHead[*type] = cutPathCStr;
-				textureSetHeadVampire[*type] = cutPathCStr;
-			}
-		}
-	}
-
-	void TextureProfile::ReadTextureFilesExtra(const fs::directory_entry& a_textureFolder)
-	{
-		const auto key = a_textureFolder.path().filename().string();
-		for (const auto& file : fs::directory_iterator{ a_textureFolder }) {
-			auto filename = file.path().filename().string();
-			if (!filename.ends_with(".dds")) {
-				continue;
-			}
-			logger::info("Reading file: {}", filename);
-			const auto type = GetTextureType(filename);
-			if (!type) {
-				logger::error("Unrecognized texture type for file: {}", filename);
-				continue;
-			}
-			Util::ToLower(filename);
-			if (filename.find("vampire") != std::string::npos) {
-				headNormalsVampire.insert_or_assign(key, file.path().string());
-			} else if (filename.find("head") != std::string::npos) {
-				headNormals.insert_or_assign(key, file.path().string());
+			for (const auto& file : fs::directory_iterator{ directory }) {
+				if (!file.is_regular_file())
+					continue;
+				const auto fileName = Util::CastLower(file.path().filename().string());
+				if (!fileName.ends_with(".dds")) {
+					logger::warn("Invalid texture file: {}", fileName);
+					continue;
+				}
+				const auto path = file.path().string();
+				const auto cutPath = path.substr(PATH_PREFIX_CUT.size());
+				if (isBodyTextureFolder || cutPath.find("head") == std::string::npos && textures.find(fileName) == textures.end()) {
+					textures[fileName] = cutPath;
+				} else {
+					const auto raceRootKey = GetSubfolderKey(cutPath);
+					if (fileName.find("vampire") != std::string::npos) {
+						headNormalsVampire[raceRootKey] = cutPath;
+					} else {
+						headNormals[raceRootKey] = cutPath;
+					}
+				}
 			}
 		}
 	}
@@ -98,62 +60,43 @@ namespace DBD
 		return std::string{};
 	}
 
-	std::optional<TextureProfile::Texture> TextureProfile::GetTextureType(const std::string_view a_file)
-	{
-		if (a_file.ends_with("_msn.dds"))
-			return Texture::kNormal;
-		else if (a_file.ends_with("_s.dds"))
-			return Texture::kSpecular;
-		else if (a_file.ends_with("_sk.dds"))
-			return Texture::kSubsurfaceTint;
-		else if (a_file.ends_with("map.dds"))
-			return Texture::kHeight;
-		else if (a_file.ends_with(".dds"))
-			return Texture::kDiffuse;
-		return std::nullopt;
-	}
-
 	bool TextureProfile::IsApplicable(RE::Actor* a_target) const
 	{
-		using VisitControl = RE::BSVisit::BSVisitControl;
-
-		std::string raceName{ "" };
-		const auto rootObject = a_target->Get3D();
-		RE::BSVisit::TraverseScenegraphGeometries(rootObject, [&](RE::BSGeometry* geometry) -> VisitControl {
-			auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
-			auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
-			if (!lightingShader) {
-				return VisitControl::kContinue;
+		const auto skin = a_target->GetSkin();
+		const auto race = a_target->GetRace();
+		if (!skin || !race) {
+			logger::error("Failed to get skin or race for actor: {}", a_target->formID);
+			return false;
+		}
+		const auto base = a_target->GetActorBase();
+		const auto sex = base ? base->GetSex() : RE::SEX::kMale;
+		for (auto&& arma : skin->armorAddons) {
+			if (!arma || !arma->IsValidRace(race) || !arma->HasPartOf(RE::BGSBipedObjectForm::BipedObjectSlot::kBody))
+				continue;
+			const auto armaTextures = arma->skinTextures[sex];
+			if (!armaTextures)
+				continue;
+			const auto pathCStr = armaTextures->GetTexturePath(Texture::kDiffuse);
+			std::string path{ pathCStr ? pathCStr : ""s };
+			Util::ToLower(path);
+			if (path.find("body") == std::string::npos) {
+				continue;
 			}
-			const auto material = static_cast<MaterialBase*>(lightingShader->material);
-			if (material->materialAlpha <= 0.0039f) {
-				return VisitControl::kContinue;
+			const auto subFolderPath = GetSubfolderKey(path);
+			if (!subFolderPath.empty()) {
+				return textureRoot == std::string_view{ subFolderPath };
 			}
-			std::string normal{ material->textureSet.get()->GetTexturePath(Texture::kNormal) };
-			Util::ToLower(normal);
-			if (normal.find("body") == std::string::npos) {
-				return VisitControl::kContinue;
-			}
-			logger::info("IsApplicable: Found texture {}: {}", name, normal);
-			raceName = GetSubfolderKey(normal);
-			if (!raceName.empty()) {
-				logger::info("IsApplicable: Extracted race: {}", raceName);
-				return VisitControl::kStop;
-			}
-			return VisitControl::kContinue;
-		});
-
-		return raceName == bodyTexturePath;
+		}
+		return false;
 	}
 
 	void TextureProfile::Apply(RE::Actor* a_target) const
 	{
 		assert(a_target);
+		ApplySkinTexture(a_target);
 		a_target->DoReset3D(true);
 		a_target->UpdateSkinColor();
-		ApplySkinTexture(a_target);
 		ApplyHeadTexture(a_target);
-		a_target->Update3DModel();
 	}
 
 	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
@@ -163,10 +106,9 @@ namespace DBD
 			const auto errMsg = std::format("Actor {} has no head part", a_target->GetName());
 			throw std::runtime_error(errMsg);
 		}
-		std::string raceName{ "" };
 
-		using VisitControl = RE::BSVisit::BSVisitControl;
-		RE::BSVisit::TraverseScenegraphGeometries(headPart, [&](RE::BSGeometry* geometry) -> RE::BSVisit::BSVisitControl {
+		std::string raceName{ "" };
+		RE::BSVisit::TraverseScenegraphGeometries(headPart, [&](RE::BSGeometry* geometry) -> VisitControl {
 			auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
 			auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
 			if (!lightingShader) {
@@ -186,11 +128,12 @@ namespace DBD
 			return VisitControl::kContinue;
 		});
 
-		const auto& appliedTextureSet = a_target->HasKeywordString("Vampire") ? textureSetHeadVampire : textureSetHead;
-		if (auto headNormal = headNormals.find(raceName); headNormal != headNormals.end()) {
-			ApplyTextureImpl(headPart, appliedTextureSet, headNormal->second);
+		const auto vampire = a_target->HasKeywordString("Vampire");
+		const auto& table = vampire ? headNormalsVampire : headNormals;
+		if (auto headNormal = table.find(raceName); headNormal != table.end()) {
+			ApplyTextureImpl(headPart, headNormal->second);
 		} else {
-			ApplyTextureImpl(headPart, appliedTextureSet);
+			ApplyTextureImpl(headPart);
 		}
 	}
 
@@ -198,7 +141,7 @@ namespace DBD
 	{
 		const auto skin = a_target->GetSkin();
 		if (!skin) {
-			logger::error("Load3DPlayer: No skin found for Character: {}", a_target->formID);
+			logger::error("No skin found for Character: {}", a_target->formID);
 			return;
 		}
 
@@ -207,73 +150,65 @@ namespace DBD
 		const auto factoryTexture = RE::IFormFactory::GetConcreteFormFactoryByType<RE::BGSTextureSet>();
 		auto newSkin = factory ? factory->Create() : nullptr;
 		if (!newSkin || !factoryARMA || !factoryTexture) {
-			logger::error("Load3DPlayer: Failed to create duplicate skin for Character: {}", a_target->formID);
+			logger::error("Failed to create duplicate skin for Character: {}", a_target->formID);
 			return;
 		}
 		newSkin->Copy(skin);
 
 		const auto base = a_target->GetActorBase();
 		if (!base) {
-			logger::error("Load3DPlayer: No ActorBase found for Character: {}", a_target->formID);
+			logger::error("No ActorBase found for Character: {}", a_target->formID);
 			return;
 		}
 		const auto sex = base->GetSex();
 		const auto race = base->GetRace();
 
-		const auto applyOverwrite = [&](RE::TESObjectARMA*& sourceArma, const TextureData& a_texture) {
-			auto& armaTextures = sourceArma->skinTextures[sex];
+		for (auto& arma : newSkin->armorAddons) {
+			if (!arma || !arma->IsValidRace(race))
+				continue;
+			auto& armaTextures = arma->skinTextures[sex];
 			auto newArma = factoryARMA->Create();
 			if (!newArma || !armaTextures) {
-				logger::error("Load3DPlayer: Failed to create duplicate body for ArmorAddon: {}", sourceArma->formID);
-				return;
+				logger::error("Failed to create duplicate body for ArmorAddon: {}", arma->formID);
+				continue;
 			}
-			newArma->data = sourceArma->data;
-			newArma->race = sourceArma->race;
-			newArma->bipedModel1stPersons[RE::SEX::kMale] = sourceArma->bipedModel1stPersons[RE::SEX::kMale];
-			newArma->bipedModel1stPersons[RE::SEX::kFemale] = sourceArma->bipedModel1stPersons[RE::SEX::kFemale];
-			newArma->bipedModels[RE::SEX::kMale] = sourceArma->bipedModels[RE::SEX::kMale];
-			newArma->bipedModels[RE::SEX::kFemale] = sourceArma->bipedModels[RE::SEX::kFemale];
-			newArma->skinTextures[RE::SEX::kMale] = sourceArma->skinTextures[RE::SEX::kMale];
-			newArma->skinTextures[RE::SEX::kFemale] = sourceArma->skinTextures[RE::SEX::kFemale];
-			newArma->bipedModelData = sourceArma->bipedModelData;
-			newArma->additionalRaces = sourceArma->additionalRaces;
-			newArma->footstepSet = sourceArma->footstepSet;
+			newArma->data = arma->data;
+			newArma->race = arma->race;
+			newArma->bipedModel1stPersons[RE::SEX::kMale] = arma->bipedModel1stPersons[RE::SEX::kMale];
+			newArma->bipedModel1stPersons[RE::SEX::kFemale] = arma->bipedModel1stPersons[RE::SEX::kFemale];
+			newArma->bipedModels[RE::SEX::kMale] = arma->bipedModels[RE::SEX::kMale];
+			newArma->bipedModels[RE::SEX::kFemale] = arma->bipedModels[RE::SEX::kFemale];
+			newArma->skinTextures[RE::SEX::kMale] = arma->skinTextures[RE::SEX::kMale];
+			newArma->skinTextures[RE::SEX::kFemale] = arma->skinTextures[RE::SEX::kFemale];
+			newArma->bipedModelData = arma->bipedModelData;
+			newArma->additionalRaces = arma->additionalRaces;
+			newArma->footstepSet = arma->footstepSet;
 			const auto newTexture = factoryTexture->Create();
 			if (!newTexture) {
-				logger::error("Load3DPlayer: Failed to create duplicate texture for ArmorAddon: {}", sourceArma->formID);
-				return;
+				logger::error("Failed to create duplicate texture for ArmorAddon: {}", arma->formID);
+				continue;
 			}
 			newTexture->flags = armaTextures->flags;
-			using Texture = RE::BSTextureSet::Texture;
 			for (size_t i = 0; i < Texture::kTotal; i++) {
 				const auto t = static_cast<Texture>(i);
-				if (const char* path = a_texture[t].data()) {
-					newTexture->SetTexturePath(t, path);
+				const char* pathCStr = armaTextures->GetTexturePath(t);
+				const std::string_view path{ pathCStr ? pathCStr : ""sv };
+				const auto filename = fs::path(path).filename().string();
+				const auto it = textures.find(filename);
+				if (it == textures.end()) {
+					newTexture->SetTexturePath(t, pathCStr);
 				} else {
-					newTexture->SetTexturePath(t, armaTextures->GetTexturePath(t));
+					newTexture->SetTexturePath(t, it->second.c_str());
 				}
 			}
 			newArma->skinTextures[sex] = newTexture;
-			sourceArma = newArma;
-		};
-
-		using SlotMask = RE::BGSBipedObjectForm::BipedObjectSlot;
-		for (auto& arma : newSkin->armorAddons) {
-			if (!arma || !arma->IsValidRace(race)) {
-				continue;
-			} else if (arma->HasPartOf(SlotMask::kBody) || arma->HasPartOf(SlotMask::kFeet) || arma->HasPartOf(SlotMask::kTail)) {
-				applyOverwrite(arma, textureSetBody);
-			} else if (arma->HasPartOf(SlotMask::kHands)) {
-				applyOverwrite(arma, textureSetHands);
-			}
+			arma = newArma;
 		}
 		base->skin = newSkin;
 	}
 
-	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, const TextureData& a_texture, const std::string& a_normal) const
+	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, const std::string& a_normal) const
 	{
-		using VisitControl = RE::BSVisit::BSVisitControl;
-
 		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) -> VisitControl {
 			const auto effect = a_geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect];
 			const auto lightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect.get());
@@ -281,6 +216,9 @@ namespace DBD
 				return VisitControl::kContinue;
 			}
 			const auto material = static_cast<MaterialBase*>(lightingShader->material);
+			if (material->materialAlpha <= 0.0039f) {
+				return VisitControl::kContinue;
+			}
 			auto const feature = material->GetFeature();
 			const auto textureSet = material->textureSet;
 			if (!textureSet || feature != Feature::kFaceGenRGBTint && feature != Feature::kFaceGen)
@@ -299,18 +237,20 @@ namespace DBD
 				logger::error("Failed to create face texture set");
 				return VisitControl::kContinue;
 			}
-			bool checkOldOnly = false;
 			for (size_t i = 0; i < Texture::kTotal; i++) {
 				const auto t = static_cast<Texture>(i);
 				if (t == Texture::kNormal && !a_normal.empty()) {
 					materialTextureNew->SetTexturePath(t, a_normal.c_str());
 					continue;
 				}
-				if (!checkOldOnly && !a_texture[t].empty()) {
-					materialTextureNew->SetTexturePath(t, a_texture[t].data());
+				const char* pathCStr = materialTexture->GetTexturePath(t);
+				const std::string_view path{ pathCStr ? pathCStr : ""sv };
+				const auto filename = fs::path(path).filename().string();
+				const auto it = textures.find(filename);
+				if (it == textures.end()) {
+					materialTextureNew->SetTexturePath(t, pathCStr);
 				} else {
-					const auto path = materialTexture->GetTexturePath(t);
-					materialTextureNew->SetTexturePath(t, path);
+					materialTextureNew->SetTexturePath(t, it->second.c_str());
 				}
 			}
 			newMaterial->OnLoadTextureSet(0, materialTextureNew);
