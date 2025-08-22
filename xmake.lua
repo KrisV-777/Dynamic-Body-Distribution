@@ -27,6 +27,17 @@ add_requires("yaml-cpp", "frozen", "magic_enum", "rapidxml")
 
 includes("lib/CommonLibVR")
 
+target("detours")
+    set_kind("static")
+    set_languages("c++17")
+    add_headerfiles("lib/detours/src/*.h", { prefixdir = "detours" })
+    add_includedirs("lib/detours/src")
+    add_files("lib/detours/src/*.cpp")
+    remove_files("lib/detours/src/uimports.cpp")
+    set_installdir("build/detours")
+target_end()
+
+
 -- policies
 set_policy("package.requires_lock", true)
 
@@ -51,6 +62,8 @@ set_config("skyrim_vr", true)
 target(PROJECT_NAME)
     -- Dependencies
     add_packages("yaml-cpp", "frozen", "magic_enum", "rapidxml")
+    add_deps("detours")
+    add_includedirs("lib/detours/src")
 
     -- CommonLibSSE
     add_deps("commonlibsse-ng")
