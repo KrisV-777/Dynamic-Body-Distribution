@@ -8,7 +8,6 @@ namespace DBD
 {
 	class Distribution :
 		public Singleton<Distribution>
-	// public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
 	{
 		static constexpr const char* TEXTURE_ROOT_PATH{ "Data\\Textures\\DBD" };
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
@@ -43,27 +42,34 @@ namespace DBD
 			MatchLevel GetApplicationLevel(RE::Actor* a_target) const;
 		};
 
+		enum CacheIndex
+		{
+			TextureId,
+			SliderId,
+
+			Total
+		};
+
 	public:
 		void Initialize();
 
 		int32_t ApplyProfiles(RE::Actor* a_target);
-		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId) const;
-		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId) const;
-
-		// protected:
-		// RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*) override;
+		bool ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId);
+		bool ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId);
 
 	private:
+		static bool ApplyProfile(RE::Actor* a_target, const ProfileBase& a_profile);
+
 		void LoadTextureProfiles();
 		void LoadSliderProfiles();
 		void LoadConditions();
 
 	private:
 		std::vector<DistributionConfig> configurations;
-		std::map<RE::BSFixedString, TextureProfile, FixedStringComparator> skins;
+		std::map<RE::BSFixedString, TextureProfile, FixedStringComparator> textures;
 		std::map<RE::BSFixedString, SliderProfile, FixedStringComparator> sliders;
 
-		std::map<RE::FormID, std::pair<RE::BSFixedString, RE::BSFixedString>> cache;  // <textureId, sliderId>
+		std::map<RE::FormID, std::array<RE::BSFixedString, CacheIndex::Total>> cache;  // <textureId, sliderId>
 	};
 
 }  // namespace DBD

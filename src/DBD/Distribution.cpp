@@ -12,89 +12,71 @@ namespace DBD
 		LoadTextureProfiles();
 		LoadSliderProfiles();
 		LoadConditions();
-
-		// auto* const scriptEvents = RE::ScriptEventSourceHolder::GetSingleton();
-		// scriptEvents->AddEventSink<RE::TESCellAttachDetachEvent>(this);
 	}
-
-	// RE::BSEventNotifyControl Distribution::ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
-	// {
-	// 	if (a_event && a_event->attached && a_event->reference) {
-	// 		const auto& ref = a_event->reference;
-	// 		if (ref->Is(RE::FormType::ActorCharacter) && ref->HasKeywordByEditorID("ActorTypeNPC")) {
-	// 			std::thread([ref]() {
-	// 				std::this_thread::sleep_for(5s);
-	// 				SKSE::GetTaskInterface()->AddTask([ref]() {
-	// 					const auto dist = Distribution::GetSingleton();
-	// 					const auto actor = ref->As<RE::Actor>();
-	// 					if (actor && actor->Is3DLoaded()) {
-	// 						dist->ApplyProfiles(actor);
-	// 					}
-	// 				});
-	// 			}).detach();
-	// 		}
-	// 	}
-	// 	return RE::BSEventNotifyControl::kContinue;
-	// }
 
 	int32_t Distribution::ApplyProfiles(RE::Actor* a_target)
 	{
-		const auto applyConfigProfile = [&](std::vector<ProfileBase*>& config) {
-			Random::shuffle(config);
-			for (const auto& profile : config) {
-				if (!profile->IsApplicable(a_target))
-					continue;
-				profile->Apply(a_target);
-				return true;
-			}
+		bool textureApplied = false, sliderApplied = false;
+		const auto cacheIt = cache.find(a_target->formID);
+		if (cacheIt != cache.end()) {
+			const auto& cached = cacheIt->second;
+			textureApplied = cached[CacheIndex::TextureId] != "" && ApplyTextureProfile(a_target, cached[CacheIndex::TextureId]);
+			sliderApplied = cached[CacheIndex::SliderId] != "" && ApplySliderProfile(a_target, cached[CacheIndex::SliderId]);
+		}
+
+		auto tryApply = [&](auto& profiles, auto fn) {
+			Random::shuffle(profiles);
+			for (auto* p : profiles)
+				if (p->IsApplicable(a_target) && fn(a_target, p->GetName()))
+					return true;
 			return false;
 		};
 
-		bool foundTextures = false, foundSliders = false;
-		std::vector<DistributionConfig*> wildcardConfigs;
-		for (auto& config : configurations) {
-			const auto level = config.GetApplicationLevel(a_target);
-			if (level == DistributionConfig::MatchLevel::None)
-				continue;
-			if (level == DistributionConfig::MatchLevel::Wildcard) {
-				wildcardConfigs.push_back(&config);
-				continue;
+		std::vector<DistributionConfig*> wildcards;
+		for (auto& cfg : configurations) {
+			switch (cfg.GetApplicationLevel(a_target)) {
+			case DistributionConfig::MatchLevel::None:
+				break;
+			case DistributionConfig::MatchLevel::Wildcard:
+				wildcards.push_back(&cfg);
+				break;
+			default:
+				textureApplied |= tryApply(cfg.textures, [this](auto* t, auto n) { return ApplyTextureProfile(t, n); });
+				sliderApplied |= tryApply(cfg.sliders, [this](auto* t, auto n) { return ApplySliderProfile(t, n); });
 			}
-			if (!foundTextures)
-				foundTextures = applyConfigProfile(config.textures);
-			if (!foundSliders)
-				foundSliders = applyConfigProfile(config.sliders);
 		}
-		if (foundTextures && foundSliders)
+		if (textureApplied && sliderApplied)
 			return 2;
-		Random::shuffle(wildcardConfigs);
-		for (auto&& config : wildcardConfigs) {
-			if (!foundTextures)
-				foundTextures = applyConfigProfile(config->textures);
-			if (!foundSliders)
-				foundSliders = applyConfigProfile(config->sliders);
+		Random::shuffle(wildcards);
+		for (auto* cfg : wildcards) {
+			textureApplied |= tryApply(cfg->textures, [this](auto* t, auto n) { return ApplyTextureProfile(t, n); });
+			sliderApplied |= tryApply(cfg->sliders, [this](auto* t, auto n) { return ApplySliderProfile(t, n); });
 		}
-		return foundTextures + foundSliders;
+		return textureApplied + sliderApplied;
 	}
 
-	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId) const
+	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const RE::BSFixedString& a_textureId)
 	{
-		auto it = skins.find(a_textureId);
-		if (it != skins.end()) {
-			const auto& textureProfile = it->second;
-			textureProfile.Apply(a_target);
-			return true;
+		auto it = textures.find(a_textureId);
+		if (it != textures.end() && ApplyProfile(a_target, it->second)) {
+			cache[a_target->formID][CacheIndex::TextureId] = a_textureId;
 		}
 		return false;
 	}
 
-	bool Distribution::ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId) const
+	bool Distribution::ApplySliderProfile(RE::Actor* a_target, const RE::BSFixedString& a_sliderId)
 	{
 		auto it = sliders.find(a_sliderId);
-		if (it != sliders.end()) {
-			const auto& sliderProfile = it->second;
-			sliderProfile.Apply(a_target);
-			return true;
+		if (it != sliders.end() && ApplyProfile(a_target, it->second)) {
+			cache[a_target->formID][CacheIndex::SliderId] = a_sliderId;
+		}
+		return false;
+	}
+
+	bool Distribution::ApplyProfile(RE::Actor* a_target, const ProfileBase& a_profile)
+	{
+		if (a_profile.IsApplicable(a_target)) {
+			return a_profile.Apply(a_target), true;
 		}
 		return false;
 	}
@@ -111,13 +93,13 @@ namespace DBD
 				try {
 					TextureProfile profile{ folder };
 					auto name = profile.GetName();
-					skins.emplace(std::make_pair(name, profile));
+					textures.emplace(std::make_pair(name, profile));
 					logger::info("Added Texture Set: {}", name);
 				} catch (const std::exception& e) {
 					logger::error("Failed to add Texture Set: {}. Error: {}", folder.path().filename().string(), e.what());
 				}
 			}
-			logger::info("Loaded {} Texture Sets", skins.size());
+			logger::info("Loaded {} Texture Sets", textures.size());
 		}
 	}
 
@@ -226,7 +208,7 @@ namespace DBD
 				}
 
 				if (auto textureNode = config["Textures"]) {
-					if (parseProfileList(textureNode, configuration.textures, skins)) {
+					if (parseProfileList(textureNode, configuration.textures, textures)) {
 						configuration.textures.clear();
 						configuration.wildcards.set(DistributionConfig::Wildcard::Textures);
 					}
