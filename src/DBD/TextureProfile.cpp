@@ -7,12 +7,6 @@ namespace DBD
 	TextureProfile::TextureProfile(const fs::directory_entry& a_textureFolder) :
 		ProfileBase(a_textureFolder.path().filename().string())
 	{
-		if (name.empty()) {
-			throw std::runtime_error("TextureProfile name is empty");
-		} else if (name[0] == '.') {
-			std::string str{ name.data() };
-			name = str.substr(1);
-		}
 		logger::info("Creating texture-set: {}", name);
 		for (auto& directory : fs::directory_iterator{ a_textureFolder }) {
 			if (!directory.is_directory())

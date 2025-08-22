@@ -5,25 +5,17 @@
 namespace DBD
 {
 	SliderProfile::SliderProfile(const std::filesystem::path& a_xmlfilePath, bool a_isMale) :
-		ProfileBase(a_xmlfilePath.filename().string()), isMale(a_isMale), transformInterface([]() {
+		ProfileBase(a_xmlfilePath.filename().string(), ".xml"), isMale(a_isMale), transformInterface([]() {
 			const auto intfc = SKEE::GetInterfaceMap();
 			return intfc ? SKEE::GetBodyMorphInterface(intfc) : nullptr;
 		}())
 	{
-		if (a_xmlfilePath.empty()) {
+		if (a_xmlfilePath.empty() || a_xmlfilePath.extension() != ".xml") {
 			throw std::invalid_argument("XML file path cannot be empty");
 		} else if (!std::filesystem::exists(a_xmlfilePath)) {
 			throw std::invalid_argument(std::format("XML file does not exist: {}", a_xmlfilePath.string()));
-		}
-		if (!transformInterface) {
+		} else if (!transformInterface) {
 			throw std::runtime_error("Failed to get transform interface");
-		}
-		constexpr std::string xmlExt = ".xml";
-		std::string nameStr{ name.data() };
-		if (nameStr.ends_with(xmlExt)) {
-			name = nameStr.substr(isPrivate, nameStr.length() - xmlExt.length());
-		} else if (isPrivate) {
-			name = nameStr.substr(1);
 		}
 
 		std::ifstream file(a_xmlfilePath);
