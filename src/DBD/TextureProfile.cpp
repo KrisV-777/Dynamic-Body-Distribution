@@ -97,42 +97,78 @@ namespace DBD
 
 	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
 	{
+		logger::info("Applying head texture to actor: {}", a_target->formID);
 		const auto headPart = a_target->GetHeadPartObject(RE::BGSHeadPart::HeadPartType::kFace);
-		if (!headPart) {
-			const auto errMsg = std::format("Actor {} has no head part", a_target->GetName());
-			// throw std::runtime_error(errMsg);
-			logger::error("{}", errMsg);
+		const auto geometry = headPart ? headPart->AsGeometry() : nullptr;
+		if (!geometry) {
+			logger::error("Actor {} has no head part geometry", a_target->GetName());
+			return;
+		}
+
+		auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
+		auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
+		if (!lightingShader) {
+			logger::error("Actor {} has no lighting shader on head part", a_target->GetName());
+			return;
+		}
+		const auto material = static_cast<MaterialBase*>(lightingShader->material);
+		if (material->GetFeature() != Feature::kFaceGen) {
+			logger::error("Actor {} head material is not FaceGen", a_target->GetName());
 			return;
 		}
 
 		std::string raceName{ "" };
-		RE::BSVisit::TraverseScenegraphGeometries(headPart, [&](RE::BSGeometry* geometry) -> VisitControl {
-			auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
-			auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
-			if (!lightingShader) {
-				return VisitControl::kContinue;
-			}
-			const auto material = static_cast<MaterialBase*>(lightingShader->material);
-			std::string normal{ material->textureSet.get()->GetTexturePath(Texture::kNormal) };
+		if (const auto normalCStr = material->textureSet.get()->GetTexturePath(Texture::kNormal)) {
+			std::string normal{ normalCStr };
 			Util::ToLower(normal);
 			if (normal.find("head") != std::string::npos) {
 				logger::info("Found texture {}: {}", name, normal);
 				raceName = GetSubfolderKey(normal);
-				if (!raceName.empty()) {
-					logger::info("Extracted race: {}", raceName);
-					return VisitControl::kStop;
-				}
 			}
-			return VisitControl::kContinue;
-		});
-
-		const auto vampire = a_target->HasKeywordString("Vampire");
-		const auto& table = vampire ? headNormalsVampire : headNormals;
-		if (auto headNormal = table.find(raceName); headNormal != table.end()) {
-			ApplyTextureImpl(headPart, headNormal->second);
-		} else {
-			ApplyTextureImpl(headPart);
 		}
+		const auto race = a_target->GetRace();
+		const auto vampire = race->HasKeywordString("Vampire");
+		const auto& headNormalTable = vampire ? headNormalsVampire : headNormals;
+		const auto headNormal = headNormalTable.find(raceName);
+
+		const auto newMaterial = static_cast<MaterialBase*>(material->Create());
+		if (!newMaterial) {
+			logger::error("Actor {} failed to create new material for texture application", a_target->GetName());
+			return;
+		}
+		newMaterial->CopyMembers(material);
+		newMaterial->ClearTextures();
+
+		const auto materialTexture = material->GetTextureSet();
+		const auto materialTextureNew = RE::BSShaderTextureSet::Create();
+		if (!materialTextureNew) {
+			logger::error("Actor {} failed to create texture set", a_target->GetName());
+			return;
+		}
+		for (size_t i = 0; i < Texture::kTotal; i++) {
+			const auto t = static_cast<Texture>(i);
+			const char* pathCStr = materialTexture->GetTexturePath(t);
+			const std::string_view path{ pathCStr ? pathCStr : ""sv };
+			const auto filename = fs::path(path).filename().string();
+			if (t == Texture::kNormal && headNormal != headNormalTable.end() && filename == headNormal->first) {
+				materialTextureNew->SetTexturePath(t, headNormal->second.c_str());
+				continue;
+			}
+			const auto it = textures.find(filename);
+			if (it == textures.end()) {
+				materialTextureNew->SetTexturePath(t, pathCStr);
+			} else {
+				materialTextureNew->SetTexturePath(t, it->second.c_str());
+			}
+		}
+		newMaterial->OnLoadTextureSet(0, materialTextureNew);
+
+		lightingShader->SetMaterial(newMaterial, true);
+		lightingShader->SetupGeometry(geometry);
+		lightingShader->FinishSetupGeometry(geometry);
+
+		newMaterial->~BSLightingShaderMaterialBase();
+		RE::free(newMaterial);
 	}
 
 	void TextureProfile::ApplySkinTexture(RE::Actor* a_target) const
@@ -203,66 +239,6 @@ namespace DBD
 			arma = newArma;
 		}
 		base->skin = newSkin;
-	}
-
-	void TextureProfile::ApplyTextureImpl(RE::NiAVObject* a_object, const std::string& a_normalPath) const
-	{
-		const auto normalFile = fs::path(a_normalPath).filename().string();
-		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) -> VisitControl {
-			const auto effect = a_geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect];
-			const auto lightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect.get());
-			if (!lightingShader || !lightingShader->material) {
-				return VisitControl::kContinue;
-			}
-			const auto material = static_cast<MaterialBase*>(lightingShader->material);
-			if (material->materialAlpha <= 0.0039f) {
-				return VisitControl::kContinue;
-			}
-			auto const feature = material->GetFeature();
-			const auto textureSet = material->textureSet;
-			if (!textureSet || feature != Feature::kFaceGenRGBTint && feature != Feature::kFaceGen)
-				return VisitControl::kContinue;
-			const auto newMaterial = static_cast<MaterialBase*>(material->Create());
-			if (!newMaterial) {
-				logger::error("Failed to create new material for texture application");
-				return VisitControl::kContinue;
-			}
-			newMaterial->CopyMembers(material);
-			newMaterial->ClearTextures();
-
-			const auto materialTexture = material->GetTextureSet();
-			const auto materialTextureNew = RE::BSShaderTextureSet::Create();
-			if (!materialTextureNew) {
-				logger::error("Failed to create texture set");
-				return VisitControl::kContinue;
-			}
-			for (size_t i = 0; i < Texture::kTotal; i++) {
-				const auto t = static_cast<Texture>(i);
-				const char* pathCStr = materialTexture->GetTexturePath(t);
-				const std::string_view path{ pathCStr ? pathCStr : ""sv };
-				const auto filename = fs::path(path).filename().string();
-				if (t == Texture::kNormal && !a_normalPath.empty() && filename == normalFile) {
-					materialTextureNew->SetTexturePath(t, a_normalPath.c_str());
-					continue;
-				}
-				const auto it = textures.find(filename);
-				if (it == textures.end()) {
-					materialTextureNew->SetTexturePath(t, pathCStr);
-				} else {
-					materialTextureNew->SetTexturePath(t, it->second.c_str());
-				}
-			}
-			newMaterial->OnLoadTextureSet(0, materialTextureNew);
-
-			lightingShader->SetMaterial(newMaterial, true);
-			lightingShader->SetupGeometry(a_geometry);
-			lightingShader->FinishSetupGeometry(a_geometry);
-
-			newMaterial->~BSLightingShaderMaterialBase();
-			RE::free(newMaterial);
-
-			return VisitControl::kContinue;
-		});
 	}
 
 }  // namespace DBD

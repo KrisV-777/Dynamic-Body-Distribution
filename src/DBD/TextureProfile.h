@@ -26,7 +26,6 @@ namespace DBD
 
 	private:
 		static std::string GetSubfolderKey(std::string a_path);
-		void ApplyTextureImpl(RE::NiAVObject* a_object, const std::string& a_normal = ""s) const;
 
 	private:
 		RE::BSFixedString textureRoot;
