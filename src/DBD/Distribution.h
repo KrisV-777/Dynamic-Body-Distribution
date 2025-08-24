@@ -76,7 +76,7 @@ namespace DBD
 		std::map<std::string, TextureProfile, StringComparator> textures;
 		std::map<std::string, SliderProfile, StringComparator> sliders;
 
-		std::map<RE::FormID, ProfileArray> cache;  // <textureId, sliderId>
+		std::map<RE::FormID, ProfileArray> cache;
 	};
 
 }  // namespace DBD

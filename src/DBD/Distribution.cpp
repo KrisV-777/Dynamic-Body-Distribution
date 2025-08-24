@@ -267,8 +267,8 @@ namespace DBD
 			}
 			// COMEBACK: If version ever gets a value != 1, update index max here
 			for (size_t i = 0; i < ProfileIndex::Total_V1; i++) {
-				if (!stl::write_string(a_intfc, data[i]->GetName())) {
-					logger::error("Failed to save reg ({})", data[i]->GetName().data());
+				if (!stl::write_string(a_intfc, data[i] ? data[i]->GetName() : ""s)) {
+					logger::error("Failed to save reg ({})", data[i] ? data[i]->GetName().data() : "null");
 					continue;
 				}
 			}
@@ -300,7 +300,7 @@ namespace DBD
 					auto it = profiles.find(cacheValue);
 					if (it != profiles.end()) {
 						cacheEntry[n] = &it->second;
-					} else {
+					} else if (!cacheValue.empty()) {
 						logger::error("Failed to load profile: {}", cacheValue);
 					}
 				};
