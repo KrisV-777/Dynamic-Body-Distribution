@@ -6,6 +6,9 @@ namespace DBD
 {
 	class TextureProfile : public ProfileBase
 	{
+		template <typename T = std::string>
+		using TextureMap = std::map<std::string, T, StringComparator>;
+
 		using VisitControl = RE::BSVisit::BSVisitControl;
 		using Feature = RE::BSLightingShaderMaterialBase::Feature;
 		using MaterialBase = RE::BSLightingShaderMaterialBase;
@@ -13,7 +16,7 @@ namespace DBD
 		using Texture = RE::BSTextureSet::Texture;
 		using TextureData = std::array<std::string, Texture::kTotal>;
 
-		static constexpr std::string_view PATH_PREFIX_CUT{ "data/textures/"sv };
+		static constexpr std::string_view PREFIX_PATH{ "data/textures"sv };
 
 	public:
 		TextureProfile(const fs::directory_entry& a_textureFolder);
@@ -26,13 +29,11 @@ namespace DBD
 		void ApplySkinTexture(RE::Actor* a_target) const;
 
 	private:
+		void FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const;
 		static std::string GetSubfolderKey(std::string a_path);
 
 	private:
-		RE::BSFixedString textureRoot;
-		std::map<std::string, std::string, StringComparator> textures;
-		std::map<std::string, std::string, StringComparator> headNormals;
-		std::map<std::string, std::string, StringComparator> headNormalsVampire;
+		TextureMap<> textures;
 	};
 
 }  // namespace DBD

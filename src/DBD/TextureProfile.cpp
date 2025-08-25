@@ -8,43 +8,21 @@ namespace DBD
 		ProfileBase(a_textureFolder.path().filename().string())
 	{
 		logger::info("Creating texture-set: {}", name);
-		for (auto& directory : fs::directory_iterator{ a_textureFolder }) {
-			if (!directory.is_directory())
+		const auto profilePrefix(std::format("DBD/{}", name.c_str()));
+		for (auto& file : fs::recursive_directory_iterator{ a_textureFolder }) {
+			if (!file.is_regular_file())
 				continue;
-			const auto isBodyTextureFolder = std::ranges::any_of(
-				fs::directory_iterator{ directory }, [](const auto& file) {
-					auto filename = Util::CastLower(file.path().filename().string());
-					return filename.find("body") != std::string::npos;
-				});
-			if (isBodyTextureFolder) {
-				const auto rootPath = directory.path().filename().string();
-				if (!textureRoot.empty()) {
-					const auto err = std::format("Found multiple body texture directories: {} and {}", textureRoot, rootPath);
-					throw std::runtime_error(err);
-				}
-				textureRoot = rootPath;
+			const auto fileName = Util::CastLower(file.path().filename().string());
+			if (!fileName.ends_with(".dds")) {
+				logger::warn("Invalid texture file: {}", fileName);
+				continue;
 			}
-			for (const auto& file : fs::directory_iterator{ directory }) {
-				if (!file.is_regular_file())
-					continue;
-				const auto fileName = Util::CastLower(file.path().filename().string());
-				if (!fileName.ends_with(".dds")) {
-					logger::warn("Invalid texture file: {}", fileName);
-					continue;
-				}
-				const auto path = file.path().string();
-				const auto cutPath = path.substr(PATH_PREFIX_CUT.size());
-				if (isBodyTextureFolder || cutPath.find("head") == std::string::npos && textures.find(fileName) == textures.end()) {
-					textures[fileName] = cutPath;
-				} else {
-					const auto raceRootKey = GetSubfolderKey(cutPath);
-					if (fileName.find("vampire") != std::string::npos) {
-						headNormalsVampire[raceRootKey] = cutPath;
-					} else {
-						headNormals[raceRootKey] = cutPath;
-					}
-				}
-			}
+			// Idk if the c_str when setting texture path (see 'FillTextureSet') needs to be persistent, so I'd rather
+			// save the full path here, despite it being easily constructible from filePath, to avoid potential UB.
+			const auto filePathRaw = file.path().string();
+			const auto filePathFull = filePathRaw.substr(PREFIX_PATH.size() + 1);  // Remove "Data/Textures/"
+			const auto filePath = filePathFull.substr(profilePrefix.size() + 1);   // Remove "Data/Textures/DBD/<profile_name>/"
+			textures[filePath] = filePathFull;
 		}
 	}
 
@@ -58,6 +36,24 @@ namespace DBD
 			}
 		}
 		return std::string{};
+	}
+
+	void TextureProfile::FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const
+	{
+		constexpr auto TEXTURE_PREFIX = "textures"sv;
+		for (size_t i = 0; i < Texture::kTotal; i++) {
+			const auto t = static_cast<Texture>(i);
+			const char* pathCStr = a_sourceSet->GetTexturePath(t);
+			std::string path{ pathCStr ? pathCStr : ""sv };
+			if (path.starts_with(TEXTURE_PREFIX)) {
+				path = path.substr(TEXTURE_PREFIX.size() + 1);
+			}
+			if (const auto it = textures.find(path); it != textures.end()) {
+				a_targetSet->SetTexturePath(t, it->second.c_str());
+			} else {
+				a_targetSet->SetTexturePath(t, pathCStr);
+			}
+		}
 	}
 
 	bool TextureProfile::IsApplicable(RE::Actor* a_target) const
@@ -76,15 +72,8 @@ namespace DBD
 			const auto armaTextures = arma->skinTextures[sex];
 			if (!armaTextures)
 				continue;
-			const auto pathCStr = armaTextures->GetTexturePath(Texture::kDiffuse);
-			std::string path{ pathCStr ? pathCStr : ""s };
-			Util::ToLower(path);
-			if (path.find("body") == std::string::npos) {
-				continue;
-			}
-			const auto subFolderPath = GetSubfolderKey(path);
-			if (!subFolderPath.empty()) {
-				return textureRoot == std::string_view{ subFolderPath };
+			if (const auto pathCStr = armaTextures->GetTexturePath(Texture::kDiffuse)) {
+				return textures.contains({ pathCStr });
 			}
 		}
 		return false;
@@ -119,20 +108,6 @@ namespace DBD
 			return;
 		}
 
-		std::string raceName{ "" };
-		if (const auto normalCStr = material->textureSet.get()->GetTexturePath(Texture::kNormal)) {
-			std::string normal{ normalCStr };
-			Util::ToLower(normal);
-			if (normal.find("head") != std::string::npos) {
-				logger::info("Found texture {}: {}", name, normal);
-				raceName = GetSubfolderKey(normal);
-			}
-		}
-		const auto race = a_target->GetRace();
-		const auto vampire = race->HasKeywordString("Vampire");
-		const auto& headNormalTable = vampire ? headNormalsVampire : headNormals;
-		const auto headNormal = headNormalTable.find(raceName);
-
 		const auto newMaterial = static_cast<MaterialBase*>(material->Create());
 		if (!newMaterial) {
 			logger::error("Actor {} failed to create new material for texture application", a_target->GetName());
@@ -147,22 +122,8 @@ namespace DBD
 			logger::error("Actor {} failed to create texture set", a_target->GetName());
 			return;
 		}
-		for (size_t i = 0; i < Texture::kTotal; i++) {
-			const auto t = static_cast<Texture>(i);
-			const char* pathCStr = materialTexture->GetTexturePath(t);
-			const std::string_view path{ pathCStr ? pathCStr : ""sv };
-			const auto filename = fs::path(path).filename().string();
-			if (t == Texture::kNormal && headNormal != headNormalTable.end() && filename == headNormal->first) {
-				materialTextureNew->SetTexturePath(t, headNormal->second.c_str());
-				continue;
-			}
-			const auto it = textures.find(filename);
-			if (it == textures.end()) {
-				materialTextureNew->SetTexturePath(t, pathCStr);
-			} else {
-				materialTextureNew->SetTexturePath(t, it->second.c_str());
-			}
-		}
+
+		FillTextureSet(materialTexture.get(), materialTextureNew);
 		newMaterial->OnLoadTextureSet(0, materialTextureNew);
 
 		if (feature == Feature::kFaceGen) {
@@ -234,18 +195,8 @@ namespace DBD
 				continue;
 			}
 			newTexture->flags = armaTextures->flags;
-			for (size_t i = 0; i < Texture::kTotal; i++) {
-				const auto t = static_cast<Texture>(i);
-				const char* pathCStr = armaTextures->GetTexturePath(t);
-				const std::string_view path{ pathCStr ? pathCStr : ""sv };
-				const auto filename = fs::path(path).filename().string();
-				const auto it = textures.find(filename);
-				if (it == textures.end()) {
-					newTexture->SetTexturePath(t, pathCStr);
-				} else {
-					newTexture->SetTexturePath(t, it->second.c_str());
-				}
-			}
+
+			FillTextureSet(armaTextures, newTexture);
 			newArma->skinTextures[sex] = newTexture;
 			arma = newArma;
 		}
