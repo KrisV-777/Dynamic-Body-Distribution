@@ -4,5 +4,6 @@
 build/
 /vcpkg_installed
 .xmake/
-dist/
+dist/SKSE/Plugins/
+dist/SKSE/DBD/
 .release/
