@@ -48,6 +48,16 @@ namespace stl
 	}
 }
 
+namespace Papyrus
+{
+#define REGISTERFUNC(func, classname, delay) a_vm->RegisterFunction(#func##sv, classname, func, !delay)
+#define STATICARGS [[maybe_unused]] VM *a_vm, [[maybe_unused]] RE::VMStackID a_stackID, RE::StaticFunctionTag *
+#define TRACESTACK(err) a_vm->TraceStack(err, a_stackID)
+
+	using VM = RE::BSScript::IVirtualMachine;
+	using StackID = RE::VMStackID;
+}
+
 struct StringComparator
 {
 	bool operator()(const std::string& lhs, const std::string& rhs) const

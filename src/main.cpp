@@ -1,6 +1,7 @@
 #include "DBD/Distribution.h"
 #include "DBD/Hooks/Hooks.h"
 #include "DBD/Serialization.h"
+#include "Papyrus/Functions.h"
 
 inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 {
@@ -63,6 +64,13 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 		logger::critical("Failed to register Listener");
 		return false;
 	}
+
+	const auto papyrus = SKSE::GetPapyrusInterface();
+	if (!papyrus) {
+		logger::critical("Failed to get papyrus interface");
+		return false;
+	}
+	papyrus->Register(Papyrus::RegisterFunctions);
 
 	const auto serialization = SKSE::GetSerializationInterface();
 	serialization->SetUniqueID('dbd');

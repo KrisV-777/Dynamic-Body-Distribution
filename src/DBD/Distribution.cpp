@@ -81,6 +81,32 @@ namespace DBD
 		return false;
 	}
 
+	void Distribution::ForEachTextureProfile(const std::function<void(const TextureProfile*)>& a_callback) const
+	{
+		if (!a_callback) {
+			return;
+		}
+		for (const auto& [id, profile] : textures) {
+			a_callback(&profile);
+		}
+	}
+
+	void Distribution::ForEachSliderProfile(const std::function<void(const SliderProfile*)>& a_callback) const
+	{
+		if (!a_callback) {
+			return;
+		}
+		for (const auto& [id, profile] : sliders) {
+			a_callback(&profile);
+		}
+	}
+
+	const Distribution::ProfileArray& Distribution::GetProfiles(RE::Actor* a_target)
+	{
+		const auto it = cache.find(a_target->formID);
+		return it != cache.end() ? it->second : (cache[a_target->formID] = ProfileArray{});
+	}
+
 	void Distribution::LoadTextureProfiles()
 	{
 		logger::info("Loading Texture Sets");

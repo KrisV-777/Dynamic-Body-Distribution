@@ -63,10 +63,15 @@ namespace DBD
 		void Load(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
 		void Revert(SKSE::SerializationInterface* a_intfc);
 
-	private:
 		bool ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId);
 		bool ApplySliderProfile(RE::Actor* a_target, const std::string& a_sliderId);
 
+		void ForEachTextureProfile(const std::function<void(const TextureProfile*)>& a_callback) const;
+		void ForEachSliderProfile(const std::function<void(const SliderProfile*)>& a_callback) const;
+
+		const ProfileArray& GetProfiles(RE::Actor* a_target);
+
+	private:
 		void LoadTextureProfiles();
 		void LoadSliderProfiles();
 		void LoadConditions();
