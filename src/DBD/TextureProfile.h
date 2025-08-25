@@ -9,6 +9,7 @@ namespace DBD
 		using VisitControl = RE::BSVisit::BSVisitControl;
 		using Feature = RE::BSLightingShaderMaterialBase::Feature;
 		using MaterialBase = RE::BSLightingShaderMaterialBase;
+		using MaterialFacegen = RE::BSLightingShaderMaterialFacegen;
 		using Texture = RE::BSTextureSet::Texture;
 		using TextureData = std::array<std::string, Texture::kTotal>;
 

@@ -90,9 +90,10 @@ namespace DBD
 		return false;
 	}
 
-	void TextureProfile::Apply(RE::Actor*) const
+	void TextureProfile::Apply(RE::Actor* a_target) const
 	{
-		throw std::runtime_error("Apply method not implemented for TextureProfiles.");
+		ApplySkinTexture(a_target);
+		ApplyHeadTexture(a_target);
 	}
 
 	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
@@ -112,7 +113,8 @@ namespace DBD
 			return;
 		}
 		const auto material = static_cast<MaterialBase*>(lightingShader->material);
-		if (material->GetFeature() != Feature::kFaceGen) {
+		const auto feature = material->GetFeature();
+		if (feature != Feature::kFaceGen && feature != Feature::kFaceGenRGBTint) {
 			logger::error("Actor {} head material is not FaceGen", a_target->GetName());
 			return;
 		}
@@ -162,6 +164,15 @@ namespace DBD
 			}
 		}
 		newMaterial->OnLoadTextureSet(0, materialTextureNew);
+
+		if (feature == Feature::kFaceGen) {
+			const auto oldFacegen = static_cast<MaterialFacegen*>(material);
+			const auto newFacegen = static_cast<MaterialFacegen*>(newMaterial);
+			if (!newFacegen->tintTexture)
+				newFacegen->tintTexture = oldFacegen->tintTexture;
+			if (!newFacegen->detailTexture)
+				newFacegen->detailTexture = oldFacegen->detailTexture;
+		}
 
 		lightingShader->SetMaterial(newMaterial, true);
 		lightingShader->SetupGeometry(geometry);
@@ -239,6 +250,7 @@ namespace DBD
 			arma = newArma;
 		}
 		base->skin = newSkin;
+		a_target->Update3DModel();
 	}
 
 }  // namespace DBD
