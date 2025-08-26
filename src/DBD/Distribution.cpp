@@ -30,6 +30,11 @@ namespace DBD
 		const auto cacheIt = cache.find(a_target->formID);
 		if (cacheIt != cache.end()) {
 			selectedProfiles = cacheIt->second;
+			for (auto& it : selectedProfiles) {
+				if (it && !it->IsApplicable(a_target)) {
+					it = nullptr;
+				}
+			}
 		}
 
 		auto trySelect = [&](auto& profiles, auto idx) {
