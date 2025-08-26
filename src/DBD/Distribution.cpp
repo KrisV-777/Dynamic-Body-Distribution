@@ -9,27 +9,26 @@ namespace DBD
 {
 	void Distribution::Initialize()
 	{
-		LoadTextureProfiles();
-		LoadSliderProfiles();
-		LoadConditions();
-
 		if (const auto intfc = SKEE::GetInterfaceMap()) {
 			actorUpdateManager = SKEE::GetActorUpdateManager(intfc);
 			morphInterface = SKEE::GetBodyMorphInterface(intfc);
-			if (!actorUpdateManager || !morphInterface) {
-				logger::error("Failed to get ActorUpdateManager or BodyMorph interface");
-				return;
+			if (actorUpdateManager) {
+				actorUpdateManager->AddInterface(this);
+			} else {
+				logger::error("Failed to get ActorUpdateManager. Some textures will not be updated");
 			}
-			actorUpdateManager->AddInterface(this);
 		} else {
 			logger::error("Failed to get SKEE interface map");
 		}
+
+		LoadTextureProfiles();
+		LoadSliderProfiles();
+		LoadConditions();
 	}
 
 	Distribution::ProfileArray Distribution::SelectProfiles(RE::Actor* a_target)
 	{
 		ProfileArray selectedProfiles{};
-
 		if (excludedForms.contains(a_target->formID)) {
 			return selectedProfiles;
 		}
@@ -39,9 +38,10 @@ namespace DBD
 			selectedProfiles = cacheIt->second;
 		}
 
-		auto trySelect = [&](auto& profiles, auto idx) {
+		auto trySelect = [&](auto* cfg, auto idx) mutable {
 			if (selectedProfiles[idx] != nullptr)
 				return true;
+			auto& profiles = cfg->profiles[idx];
 			Random::shuffle(profiles);
 			for (auto* p : profiles)
 				if (p->IsApplicable(a_target))
@@ -58,17 +58,41 @@ namespace DBD
 				wildcards.push_back(&cfg);
 				break;
 			default:
-				trySelect(cfg.textures, ProfileIndex::TextureId);
-				trySelect(cfg.sliders, ProfileIndex::SliderId);
+				trySelect(&cfg, ProfileIndex::TextureId);
+				trySelect(&cfg, ProfileIndex::SliderId);
 			}
 		}
 
+		const auto draw = [&]<class T>(T& map) -> typename T::mapped_type* {
+			if (map.empty())
+				return nullptr;
+			std::vector<typename T::mapped_type*> result;
+			result.reserve(map.size());
+			for (auto& [key, value] : map) {
+				if (value.IsApplicable(a_target))
+					result.push_back(&value);
+			}
+			return result.empty() ? nullptr : Random::draw(result);
+		};
+
+		using Wildcard = DistributionConfig::Wildcard;
 		Random::shuffle(wildcards);
 		while (!wildcards.empty() && std::ranges::find(selectedProfiles, nullptr) != selectedProfiles.end()) {
 			auto* cfg = wildcards.back();
 			wildcards.pop_back();
-			trySelect(cfg->textures, ProfileIndex::TextureId);
-			trySelect(cfg->sliders, ProfileIndex::SliderId);
+			for (size_t i = 0; i < ProfileIndex::Total; i++) {
+				if (selectedProfiles[i] != nullptr)
+					continue;
+				if (cfg->wildcards.all(Wildcard(1 << (i + 1)))) {
+					if (i == ProfileIndex::TextureId) {
+						selectedProfiles[i] = draw(textures);
+					} else {
+						selectedProfiles[i] = draw(sliders);
+					}
+				} else {
+					trySelect(cfg, i);
+				}
+			}
 		}
 
 		cache[a_target->formID] = selectedProfiles;
@@ -261,21 +285,23 @@ namespace DBD
 				};
 
 				if (auto sliderNode = config["Sliders"]) {
-					if (parseProfileList(sliderNode, configuration.sliders, sliders)) {
-						configuration.sliders.clear();
+					auto& vec = configuration.profiles[ProfileIndex::SliderId];
+					if (parseProfileList(sliderNode, vec, sliders)) {
 						configuration.wildcards.set(DistributionConfig::Wildcard::Sliders);
+						vec.clear();
 					}
 				}
 
 				if (auto textureNode = config["Textures"]) {
-					if (parseProfileList(textureNode, configuration.textures, textures)) {
-						configuration.textures.clear();
+					auto& vec = configuration.profiles[ProfileIndex::TextureId];
+					if (parseProfileList(textureNode, vec, textures)) {
 						configuration.wildcards.set(DistributionConfig::Wildcard::Textures);
+						vec.clear();
 					}
 				}
 
-				if (configuration.sliders.empty() && configuration.textures.empty() &&
-					!configuration.wildcards.any(DistributionConfig::Wildcard::Sliders, DistributionConfig::Wildcard::Textures)) {
+				if (configuration.profiles[ProfileIndex::SliderId].empty() && configuration.profiles[ProfileIndex::TextureId].empty() &&
+					configuration.wildcards.none(DistributionConfig::Wildcard::Sliders, DistributionConfig::Wildcard::Textures)) {
 					logger::error("Configuration '{}' has no valid sliders or textures", fileName);
 					continue;
 				}

@@ -15,6 +15,17 @@ namespace DBD
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
 		static constexpr const char* CONFIGURATION_ROOT_PATH{ "Data\\SKSE\\DBD\\Configurations" };
 
+	public:
+		enum ProfileIndex
+		{
+			TextureId,
+			SliderId,
+
+			Total_V1,
+			Total = Total_V1
+		};
+		using ProfileArray = std::array<ProfileBase*, ProfileIndex::Total>;
+
 		struct DistributionConfig
 		{
 			enum class MatchLevel
@@ -27,8 +38,8 @@ namespace DBD
 			enum class Wildcard
 			{
 				Condition = 1 << 0,
-				Sliders = 1 << 1,
-				Textures = 1 << 2
+				Textures = 1 << 1,
+				Sliders = 1 << 2,
 			};
 			REX::EnumSet<Wildcard> wildcards;
 
@@ -37,23 +48,10 @@ namespace DBD
 			std::vector<RE::FormID> races;
 			std::vector<RE::BGSKeyword*> keywords;
 			std::vector<RE::TESFaction*> factions;
-
-			std::vector<ProfileBase*> sliders;
-			std::vector<ProfileBase*> textures;
+			std::array<std::vector<ProfileBase*>, ProfileIndex::Total> profiles;
 
 			MatchLevel GetApplicationLevel(RE::Actor* a_target) const;
 		};
-
-	public:
-		enum ProfileIndex
-		{
-			TextureId,
-			SliderId,
-
-			Total_V1,
-			Total = Total_V1
-		};
-		using ProfileArray = std::array<ProfileBase*, ProfileIndex::Total>;
 
 	public:
 		void Initialize();
