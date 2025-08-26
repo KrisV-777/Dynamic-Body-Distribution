@@ -9,7 +9,7 @@ namespace DBD
 			name(std::move(a_name)), isPrivate(!name.empty() && name[0] == '.')
 		{
 			std::string nameTmp{ name.c_str() };
-			name = nameTmp.substr(isPrivate, nameTmp.length() - extension.length());
+			name = nameTmp.substr(isPrivate, nameTmp.length() - extension.length() - isPrivate);
 			if (name.empty()) {
 				throw std::runtime_error("Profile name is empty");
 			}
