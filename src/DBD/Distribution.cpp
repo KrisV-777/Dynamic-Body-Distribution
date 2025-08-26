@@ -420,14 +420,13 @@ namespace DBD
 		[[maybe_unused]] RE::NiNode* skeleton,
 		[[maybe_unused]] RE::NiNode* root)
 	{
-		if (!refr || !armor || !addon || !object || !refr->IsPlayerRef()) {
+		if (!refr || !armor || !addon || !object) {
 			return;
 		}
 		const auto cacheEntry = cache.find(refr->GetFormID());
 		if (cacheEntry == cache.end()) {
 			return;
 		}
-		// Apply cached profiles to the actor
 		const auto& profiles = cacheEntry->second;
 		const auto& textureProfile = static_cast<TextureProfile*>(profiles[ProfileIndex::TextureId]);
 		if (!textureProfile) {
