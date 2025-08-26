@@ -24,6 +24,8 @@ namespace DBD
 		LoadTextureProfiles();
 		LoadSliderProfiles();
 		LoadConditions();
+
+		RE::UI::GetSingleton()->AddEventSink<RE::MenuOpenCloseEvent>(this);
 	}
 
 	Distribution::ProfileArray Distribution::SelectProfiles(RE::Actor* a_target)
@@ -409,6 +411,27 @@ namespace DBD
 	void Distribution::Revert(SKSE::SerializationInterface*)
 	{
 		cache.clear();
+	}
+
+	RE::BSEventNotifyControl Distribution::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
+	{
+		constexpr auto charGenMenu = RE::RaceSexMenu::MENU_NAME;
+		if (!a_event || a_event->menuName != charGenMenu) {
+			return RE::BSEventNotifyControl::kContinue;
+		}
+		const auto player = RE::PlayerCharacter::GetSingleton();
+		const auto playerNPC = player->GetActorBase();
+		if (!playerNPC) {
+			return RE::BSEventNotifyControl::kContinue;
+		}
+		const auto playerSex = playerNPC->GetSex();
+		if (a_event->opening) {
+			playerSexPreChargen = playerSex;
+		} else if (playerSex != playerSexPreChargen) {
+			ClearProfiles(player, false);
+			player->DoReset3D(false);
+		}
+		return RE::BSEventNotifyControl::kContinue;
 	}
 
 	void Distribution::OnAttach(
