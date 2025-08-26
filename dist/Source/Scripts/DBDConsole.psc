@@ -62,3 +62,11 @@ Function PrintCurrentProfiles(Actor akActor) global
   ConsoleUtil.PrintConsole("Texture Profile: " + profiles[0])
   ConsoleUtil.PrintConsole("Slider Profile: " + profiles[1])
 EndFunction
+
+Function ClearProfiles(Actor akActor, bool abAndExclude) global
+  If (!akActor)
+    ConsoleUtil.PrintConsole("Invalid actor reference.")
+    return
+  EndIf
+  DynamicBodyDistribution.ClearProfiles(akActor, abAndExclude)
+EndFunction

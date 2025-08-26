@@ -68,4 +68,13 @@ namespace Papyrus
 		return profiles;
 	}
 
+	void ClearProfiles(STATICARGS, RE::Actor* a_target, bool a_exclude)
+	{
+		if (!a_target) {
+			TRACESTACK("Papyrus::ClearProfiles - target is none");
+			return;
+		}
+		DBD::Distribution::GetSingleton()->ClearProfiles(a_target, a_exclude);
+	}
+
 }  // namespace Papyrus

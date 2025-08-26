@@ -4,8 +4,8 @@ alias: dbd
 script: DBDConsole
 help: Debug utility commands for Dynamic Body Distribution
 subs:
-  - name: reset3d
-    alias: da
+  - name: Reset3D
+    alias: reset
     func: Reset3D
     help: Reset the 3D model of the selected Actor and refresh its profiles
     args:
@@ -14,7 +14,7 @@ subs:
         selected: true
         required: true
         help: The actor whose 3d to reset
-  - name: Print Texture Profiles
+  - name: PrintTextureProfiles
     alias: ptp
     func: PrintTextureProfiles
     help: Print the texture profiles of the selected Actor (or all actors if none is selected)
@@ -24,7 +24,7 @@ subs:
         selected: true
         required: false
         help: A reference to filter the texture profiles
-  - name: Print Slider Profiles
+  - name: PrintSliderProfiles
     alias: psp
     func: PrintSliderProfiles
     help: Print the slider profiles of the selected Actor (or all actors if none is selected)
@@ -34,7 +34,7 @@ subs:
         selected: true
         required: false
         help: A reference to filter the slider profiles
-  - name: Apply Texture Profile
+  - name: ApplyTextureProfile
     alias: atp
     func: ApplyTextureProfileConsole
     help: Apply a texture profile to the selected Actor
@@ -48,7 +48,7 @@ subs:
         type: String
         required: true
         help: The texture profile to apply
-  - name: Apply Slider Profile
+  - name: ApplySliderProfile
     alias: asp
     func: ApplySliderProfileConsole
     help: Apply a slider profile to the selected Actor
@@ -62,7 +62,7 @@ subs:
         type: String
         required: true
         help: The slider profile to apply
-  - name: Print Current Profiles
+  - name: PrintCurrentProfiles
     alias: pcp
     func: PrintCurrentProfiles
     help: Print the current profiles used by the selected Actor
@@ -72,3 +72,18 @@ subs:
         selected: true
         required: true
         help: The actor whose current profiles to print
+  - name: ClearProfiles
+    alias: cp
+    func: ClearProfiles
+    help: Clear the profiles used by the selected Actor
+    args:
+      - name: target
+        type: Actor
+        selected: true
+        required: true
+        help: The actor whose profiles to clear
+      - name: exclude
+        type: bool
+        required: false
+        default: false
+        help: If true, exclude the profiles from being re-assigned

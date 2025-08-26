@@ -27,6 +27,10 @@ namespace DBD
 	{
 		ProfileArray selectedProfiles{};
 
+		if (excludedForms.contains(a_target->formID)) {
+			return selectedProfiles;
+		}
+
 		const auto cacheIt = cache.find(a_target->formID);
 		if (cacheIt != cache.end()) {
 			selectedProfiles = cacheIt->second;
@@ -78,6 +82,7 @@ namespace DBD
 		auto it = textures.find(a_textureId);
 		if (it != textures.end() && it->second.IsApplicable(a_target)) {
 			cache[a_target->formID][ProfileIndex::TextureId] = &it->second;
+			excludedForms.erase(a_target->formID);
 			a_target->DoReset3D(false);
 			return true;
 		}
@@ -89,6 +94,7 @@ namespace DBD
 		auto it = sliders.find(a_sliderId);
 		if (it != sliders.end() && it->second.IsApplicable(a_target)) {
 			cache[a_target->formID][ProfileIndex::SliderId] = &it->second;
+			excludedForms.erase(a_target->formID);
 			a_target->DoReset3D(true);
 			return true;
 		}
@@ -119,6 +125,17 @@ namespace DBD
 	{
 		const auto it = cache.find(a_target->formID);
 		return it != cache.end() ? it->second : (cache[a_target->formID] = ProfileArray{});
+	}
+
+	void Distribution::ClearProfiles(RE::Actor* a_target, bool a_exclude)
+	{
+		const auto formID = a_target->formID;
+		if (a_exclude) {
+			excludedForms.insert(formID);
+		} else {
+			excludedForms.erase(formID);
+		}
+		cache.erase(formID);
 	}
 
 	void Distribution::LoadTextureProfiles()

@@ -60,11 +60,6 @@ namespace DBD
 
 		ProfileArray SelectProfiles(RE::Actor* a_target);
 
-	public:
-		void Save(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
-		void Load(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
-		void Revert(SKSE::SerializationInterface* a_intfc);
-
 		bool ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId);
 		bool ApplySliderProfile(RE::Actor* a_target, const std::string& a_sliderId);
 
@@ -72,6 +67,12 @@ namespace DBD
 		void ForEachSliderProfile(const std::function<void(const SliderProfile*)>& a_callback) const;
 
 		const ProfileArray& GetProfiles(RE::Actor* a_target);
+		void ClearProfiles(RE::Actor* a_target, bool a_exclude);
+
+	public:
+		void Save(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
+		void Load(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
+		void Revert(SKSE::SerializationInterface* a_intfc);
 
 	private:
 		void OnAttach(RE::TESObjectREFR* refr, RE::TESObjectARMO* armor, RE::TESObjectARMA* addon, RE::NiAVObject* object, bool isFirstPerson, RE::NiNode* skeleton, RE::NiNode* root) override;
@@ -85,6 +86,7 @@ namespace DBD
 		std::map<std::string, TextureProfile, StringComparator> textures;
 		std::map<std::string, SliderProfile, StringComparator> sliders;
 
+		std::set<RE::FormID> excludedForms;
 		std::map<RE::FormID, ProfileArray> cache;
 
 		SKEE::IActorUpdateManager* actorUpdateManager;

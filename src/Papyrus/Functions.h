@@ -11,6 +11,7 @@ namespace Papyrus
 	bool ApplySliderProfile(STATICARGS, RE::Actor* a_target, RE::BSFixedString a_profile);
 
 	std::vector<RE::BSFixedString> GetProfiles(STATICARGS, RE::Actor* a_target);
+	void ClearProfiles(STATICARGS, RE::Actor* a_target, bool a_exclude);
 
 	inline bool RegisterFunctions(VM* a_vm)
 	{
@@ -23,6 +24,7 @@ namespace Papyrus
 		REGISTERFUNC(ApplySliderProfile, "DynamicBodyDistribution", true);
 
 		REGISTERFUNC(GetProfiles, "DynamicBodyDistribution", true);
+		REGISTERFUNC(ClearProfiles, "DynamicBodyDistribution", true);
 
 		return true;
 	}
