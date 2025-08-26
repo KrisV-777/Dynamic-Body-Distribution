@@ -69,7 +69,7 @@ namespace DBD
 			std::vector<typename T::mapped_type*> result;
 			result.reserve(map.size());
 			for (auto& [key, value] : map) {
-				if (value.IsApplicable(a_target))
+				if (!value.IsPrivate() && value.IsApplicable(a_target))
 					result.push_back(&value);
 			}
 			return result.empty() ? nullptr : Random::draw(result);
