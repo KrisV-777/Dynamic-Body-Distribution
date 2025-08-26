@@ -1,5 +1,6 @@
 #pragma once
 
+#include "API/SKEE.h"
 #include "SliderProfile.h"
 #include "TextureProfile.h"
 #include "Util/Singleton.h"
@@ -7,7 +8,8 @@
 namespace DBD
 {
 	class Distribution :
-		public Singleton<Distribution>
+		public Singleton<Distribution>,
+		public SKEE::IAddonAttachmentInterface
 	{
 		static constexpr const char* TEXTURE_ROOT_PATH{ "Data\\Textures\\DBD" };
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
@@ -72,6 +74,8 @@ namespace DBD
 		const ProfileArray& GetProfiles(RE::Actor* a_target);
 
 	private:
+		void OnAttach(RE::TESObjectREFR* refr, RE::TESObjectARMO* armor, RE::TESObjectARMA* addon, RE::NiAVObject* object, bool isFirstPerson, RE::NiNode* skeleton, RE::NiNode* root) override;
+
 		void LoadTextureProfiles();
 		void LoadSliderProfiles();
 		void LoadConditions();
@@ -82,6 +86,8 @@ namespace DBD
 		std::map<std::string, SliderProfile, StringComparator> sliders;
 
 		std::map<RE::FormID, ProfileArray> cache;
+
+		SKEE::IActorUpdateManager* actorUpdateManager;
 	};
 
 }  // namespace DBD

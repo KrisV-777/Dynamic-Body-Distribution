@@ -40,11 +40,15 @@ namespace DBD
 
 	void TextureProfile::FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const
 	{
+		constexpr auto DATA_PREFIX = "data"sv;
 		constexpr auto TEXTURE_PREFIX = "textures"sv;
 		for (size_t i = 0; i < Texture::kTotal; i++) {
 			const auto t = static_cast<Texture>(i);
 			const char* pathCStr = a_sourceSet->GetTexturePath(t);
 			std::string path{ pathCStr ? pathCStr : ""sv };
+			Util::ToLower(path);
+			if (path.starts_with(DATA_PREFIX))
+				path = path.substr(DATA_PREFIX.size() + 1);
 			if (path.starts_with(TEXTURE_PREFIX)) {
 				path = path.substr(TEXTURE_PREFIX.size() + 1);
 			}
@@ -81,8 +85,9 @@ namespace DBD
 
 	void TextureProfile::Apply(RE::Actor* a_target) const
 	{
-		ApplySkinTexture(a_target);
-		ApplyHeadTexture(a_target);
+		SKSE::GetTaskInterface()->AddTask([=]() {
+			a_target->DoReset3D(false);
+		});
 	}
 
 	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
@@ -202,6 +207,46 @@ namespace DBD
 		}
 		base->skin = newSkin;
 		a_target->Update3DModel();
+	}
+
+	void TextureProfile::HandleOnAttach(RE::NiAVObject* object)
+	{
+		const auto geometry = object->AsGeometry();
+		if (!geometry) {
+			return;
+		}
+		auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
+		auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
+		if (!lightingShader) {
+			return;
+		}
+		const auto material = static_cast<MaterialBase*>(lightingShader->material);
+		const auto feature = material->GetFeature();
+		if (feature != Feature::kFaceGenRGBTint) {
+			return;
+		}
+		const auto newMaterial = static_cast<MaterialBase*>(material->Create());
+		if (!newMaterial) {
+			return;
+		}
+		newMaterial->CopyMembers(material);
+		newMaterial->ClearTextures();
+
+		const auto materialTexture = material->GetTextureSet();
+		const auto materialTextureNew = RE::BSShaderTextureSet::Create();
+		if (!materialTextureNew) {
+			return;
+		}
+
+		FillTextureSet(materialTexture.get(), materialTextureNew);
+		newMaterial->OnLoadTextureSet(0, materialTextureNew);
+
+		lightingShader->SetMaterial(newMaterial, true);
+		lightingShader->SetupGeometry(geometry);
+		lightingShader->FinishSetupGeometry(geometry);
+
+		newMaterial->~BSLightingShaderMaterialBase();
+		RE::free(newMaterial);
 	}
 
 }  // namespace DBD

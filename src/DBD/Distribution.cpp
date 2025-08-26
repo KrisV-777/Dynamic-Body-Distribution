@@ -12,6 +12,15 @@ namespace DBD
 		LoadTextureProfiles();
 		LoadSliderProfiles();
 		LoadConditions();
+
+
+		const auto intfc = SKEE::GetInterfaceMap();
+		actorUpdateManager = intfc ? SKEE::GetActorUpdateManager(intfc) : nullptr;
+		if (!actorUpdateManager) {
+			logger::error("Failed to get ActorUpdateManager interface. Some textures may not be updated");
+			return;
+		}
+		actorUpdateManager->AddInterface(this);
 	}
 
 	Distribution::ProfileArray Distribution::SelectProfiles(RE::Actor* a_target)
@@ -349,6 +358,31 @@ namespace DBD
 	void Distribution::Revert(SKSE::SerializationInterface*)
 	{
 		cache.clear();
+	}
+
+	void Distribution::OnAttach(
+		[[maybe_unused]] RE::TESObjectREFR* refr,
+		[[maybe_unused]] RE::TESObjectARMO* armor,
+		[[maybe_unused]] RE::TESObjectARMA* addon,
+		[[maybe_unused]] RE::NiAVObject* object,
+		[[maybe_unused]] bool isFirstPerson,
+		[[maybe_unused]] RE::NiNode* skeleton,
+		[[maybe_unused]] RE::NiNode* root)
+	{
+		if (!refr || !armor || !addon || !object || !refr->IsPlayerRef()) {
+			return;
+		}
+		const auto cacheEntry = cache.find(refr->GetFormID());
+		if (cacheEntry == cache.end()) {
+			return;
+		}
+		// Apply cached profiles to the actor
+		const auto& profiles = cacheEntry->second;
+		const auto& textureProfile = static_cast<TextureProfile*>(profiles[ProfileIndex::TextureId]);
+		if (!textureProfile) {
+			return;
+		}
+		textureProfile->HandleOnAttach(object);
 	}
 
 }  // namespace DBD

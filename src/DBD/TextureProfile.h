@@ -28,6 +28,8 @@ namespace DBD
 		void ApplyHeadTexture(RE::Actor* a_target) const;
 		void ApplySkinTexture(RE::Actor* a_target) const;
 
+		void HandleOnAttach(RE::NiAVObject* a_object);
+
 	private:
 		void FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const;
 		static std::string GetSubfolderKey(std::string a_path);
