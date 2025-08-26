@@ -13,14 +13,17 @@ namespace DBD
 		LoadSliderProfiles();
 		LoadConditions();
 
-
-		const auto intfc = SKEE::GetInterfaceMap();
-		actorUpdateManager = intfc ? SKEE::GetActorUpdateManager(intfc) : nullptr;
-		if (!actorUpdateManager) {
-			logger::error("Failed to get ActorUpdateManager interface. Some textures may not be updated");
-			return;
+		if (const auto intfc = SKEE::GetInterfaceMap()) {
+			actorUpdateManager = SKEE::GetActorUpdateManager(intfc);
+			morphInterface = SKEE::GetBodyMorphInterface(intfc);
+			if (!actorUpdateManager || !morphInterface) {
+				logger::error("Failed to get ActorUpdateManager or BodyMorph interface");
+				return;
+			}
+			actorUpdateManager->AddInterface(this);
+		} else {
+			logger::error("Failed to get SKEE interface map");
 		}
-		actorUpdateManager->AddInterface(this);
 	}
 
 	Distribution::ProfileArray Distribution::SelectProfiles(RE::Actor* a_target)
@@ -34,11 +37,6 @@ namespace DBD
 		const auto cacheIt = cache.find(a_target->formID);
 		if (cacheIt != cache.end()) {
 			selectedProfiles = cacheIt->second;
-			for (auto& it : selectedProfiles) {
-				if (it && !it->IsApplicable(a_target)) {
-					it = nullptr;
-				}
-			}
 		}
 
 		auto trySelect = [&](auto& profiles, auto idx) {
@@ -130,12 +128,13 @@ namespace DBD
 	void Distribution::ClearProfiles(RE::Actor* a_target, bool a_exclude)
 	{
 		const auto formID = a_target->formID;
-		if (a_exclude) {
-			excludedForms.insert(formID);
-		} else {
+		excludedForms.insert(formID);
+		cache.erase(formID);
+		SliderProfile::DeleteMorphs(a_target, morphInterface);
+		a_target->DoReset3D(false);
+		if (!a_exclude) {
 			excludedForms.erase(formID);
 		}
-		cache.erase(formID);
 	}
 
 	void Distribution::LoadTextureProfiles()
@@ -163,6 +162,10 @@ namespace DBD
 	void Distribution::LoadSliderProfiles()
 	{
 		logger::info("Loading Slider Sets");
+		if (!morphInterface) {
+			logger::critical("Missing morph interface. Skipping slider profile initialization");
+			return;
+		}
 		for (auto& type : std::vector{ "male", "female" }) {
 			const auto rootFolder = std::format("{}/{}", SLIDER_ROOT_PATH, type);
 			if (!fs::exists(rootFolder)) {
@@ -178,7 +181,7 @@ namespace DBD
 					continue;
 				}
 				try {
-					SliderProfile profile{ file.path().string(), (type == "male"s) };
+					SliderProfile profile{ file.path().string(), (type == "male"s), morphInterface };
 					auto name = profile.GetName();
 					sliders.emplace(std::make_pair(name, profile));
 					logger::info("Added Slider Set: {}", name);

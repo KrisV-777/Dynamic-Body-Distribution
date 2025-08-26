@@ -4,18 +4,15 @@
 
 namespace DBD
 {
-	SliderProfile::SliderProfile(const std::filesystem::path& a_xmlfilePath, bool a_isMale) :
-		ProfileBase(a_xmlfilePath.filename().string(), ".xml"), isMale(a_isMale), transformInterface([]() {
-			const auto intfc = SKEE::GetInterfaceMap();
-			return intfc ? SKEE::GetBodyMorphInterface(intfc) : nullptr;
-		}())
+	SliderProfile::SliderProfile(const std::filesystem::path& a_xmlfilePath, bool a_isMale, SKEE::IBodyMorphInterface* a_interface) :
+		ProfileBase(a_xmlfilePath.filename().string(), ".xml"), isMale(a_isMale), transformInterface(a_interface)
 	{
 		if (a_xmlfilePath.empty() || a_xmlfilePath.extension() != ".xml") {
 			throw std::invalid_argument("XML file path cannot be empty");
 		} else if (!std::filesystem::exists(a_xmlfilePath)) {
 			throw std::invalid_argument(std::format("XML file does not exist: {}", a_xmlfilePath.string()));
 		} else if (!transformInterface) {
-			throw std::runtime_error("Failed to get transform interface");
+			throw std::runtime_error("Missing transform interface");
 		}
 
 		std::ifstream file(a_xmlfilePath);
@@ -73,6 +70,13 @@ namespace DBD
 		}
 		const auto base = a_target->GetActorBase();
 		return base && base->GetSex() == (isMale ? RE::SEX::kMale : RE::SEX::kFemale);
+	}
+
+	void SliderProfile::DeleteMorphs(RE::Actor* a_target, SKEE::IBodyMorphInterface* a_interface)
+	{
+		a_interface->ClearBodyMorphKeys(a_target, MORPH_KEY);
+		a_interface->ApplyBodyMorphs(a_target, false);
+		a_interface->UpdateModelWeight(a_target, true);
 	}
 
 }  // namespace DBD

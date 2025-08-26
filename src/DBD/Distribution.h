@@ -90,6 +90,7 @@ namespace DBD
 		std::map<RE::FormID, ProfileArray> cache;
 
 		SKEE::IActorUpdateManager* actorUpdateManager;
+		SKEE::IBodyMorphInterface* morphInterface;
 	};
 
 }  // namespace DBD

@@ -10,11 +10,13 @@ namespace DBD
 		constexpr static const char* MORPH_KEY = "DBD_Morph";
 
 	public:
-		SliderProfile(const std::filesystem::path& a_xmlfilePath, bool a_isMale);
+		SliderProfile(const std::filesystem::path& a_xmlfilePath, bool a_isMale, SKEE::IBodyMorphInterface* a_interface);
 		~SliderProfile() = default;
 
 		void Apply(RE::Actor* a_target) const override;
 		bool IsApplicable(RE::Actor* a_target) const override;
+
+		static void DeleteMorphs(RE::Actor* a_target, SKEE::IBodyMorphInterface* a_interface);
 
 	private:
 		bool isMale;
