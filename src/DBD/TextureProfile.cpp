@@ -76,8 +76,11 @@ namespace DBD
 			const auto armaTextures = arma->skinTextures[sex];
 			if (!armaTextures)
 				continue;
-			if (const auto pathCStr = armaTextures->GetTexturePath(Texture::kDiffuse)) {
-				return textures.contains({ pathCStr });
+			for (size_t i = 0; i < Texture::kTotal; i++) {
+				const auto pathCStr = armaTextures->GetTexturePath(static_cast<Texture>(i));
+				if (pathCStr && textures.contains({ pathCStr })) {
+					return true;
+				}
 			}
 		}
 		return false;
