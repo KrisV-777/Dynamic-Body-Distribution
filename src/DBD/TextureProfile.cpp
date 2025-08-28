@@ -209,7 +209,7 @@ namespace DBD
 		a_target->Update3DModel();
 	}
 
-	void TextureProfile::HandleOnAttach(RE::NiAVObject* object)
+	void TextureProfile::HandleOnAttach(RE::NiAVObject* object) const
 	{
 		const auto geometry = object->AsGeometry();
 		if (!geometry) {

@@ -25,87 +25,69 @@ namespace DBD
 		LoadSliderProfiles();
 		LoadConditions();
 
-		RE::UI::GetSingleton()->AddEventSink<RE::MenuOpenCloseEvent>(this);
+		const auto player = RE::PlayerCharacter::GetSingleton();
+		const auto playerNPC = player->GetActorBase();
+		playerSexPreChargen = playerNPC ? playerNPC->GetSex() : RE::SEX::kMale;
+
+		// RE::UI::GetSingleton()->AddEventSink<RE::MenuOpenCloseEvent>(this);
 	}
 
-	Distribution::ProfileArray Distribution::SelectProfiles(RE::Actor* a_target)
+	Distribution::ProfileArray<const ProfileBase*> Distribution::SelectProfiles(RE::Actor* a_target)
 	{
-		ProfileArray selectedProfiles{};
+		ProfileArray<const ProfileBase*> selectedProfiles{};
 		if (excludedForms.contains(a_target->formID)) {
 			return selectedProfiles;
 		}
 
 		const auto cacheIt = cache.find(a_target->formID);
 		if (cacheIt != cache.end()) {
+			if (a_target->IsPlayerRef()) {
+				const auto npc = a_target->GetActorBase();
+				if (npc && npc->GetSex() != playerSexPreChargen) {
+					ClearProfiles(a_target, false);
+					playerSexPreChargen = npc->GetSex();
+					logger::info("Player sex changed from {} to {}", std::to_underlying(playerSexPreChargen), std::to_underlying(npc->GetSex()));
+					goto SkipCaching;
+				}
+			}
 			selectedProfiles = cacheIt->second;
 		}
 
-		auto trySelect = [&](auto* cfg, auto idx) mutable {
-			if (selectedProfiles[idx] != nullptr)
-				return true;
-			auto& profiles = cfg->profiles[idx];
-			Random::shuffle(profiles);
-			for (auto* p : profiles)
-				if (p->IsApplicable(a_target))
-					return selectedProfiles[idx] = p, true;
-			return false;
-		};
-
-		std::vector<DistributionConfig*> wildcards;
-		for (auto& cfg : configurations) {
-			switch (cfg.GetApplicationLevel(a_target)) {
-			case DistributionConfig::MatchLevel::None:
-				break;
-			case DistributionConfig::MatchLevel::Wildcard:
-				wildcards.push_back(&cfg);
-				break;
-			default:
-				trySelect(&cfg, ProfileIndex::TextureId);
-				trySelect(&cfg, ProfileIndex::SliderId);
-			}
-		}
-
-		const auto draw = [&]<class T>(T& map) -> typename T::mapped_type* {
-			if (map.empty())
-				return nullptr;
-			std::vector<typename T::mapped_type*> result;
-			result.reserve(map.size());
-			for (auto& [key, value] : map) {
-				if (!value.IsPrivate() && value.IsApplicable(a_target))
-					result.push_back(&value);
-			}
-			return result.empty() ? nullptr : Random::draw(result);
-		};
-
-		using Wildcard = DistributionConfig::Wildcard;
-		Random::shuffle(wildcards);
-		while (!wildcards.empty() && std::ranges::find(selectedProfiles, nullptr) != selectedProfiles.end()) {
-			auto* cfg = wildcards.back();
-			wildcards.pop_back();
-			for (size_t i = 0; i < ProfileIndex::Total; i++) {
-				if (selectedProfiles[i] != nullptr)
+SkipCaching:
+		for (size_t i = 0; i < ProfileIndex::Total; i++) {
+			if (selectedProfiles[i] != nullptr)
+				continue;
+			const auto& mapping = profileMap[i];
+			std::vector<const ProfileBase*> candidates;
+			auto priority = ConditionPriority::None;
+			for (auto&& [id, profile] : mapping) {
+				if (!profile->IsApplicable(a_target)) {
 					continue;
-				if (cfg->wildcards.all(Wildcard(1 << (i + 1)))) {
-					if (i == ProfileIndex::TextureId) {
-						selectedProfiles[i] = draw(textures);
-					} else {
-						selectedProfiles[i] = draw(sliders);
-					}
-				} else {
-					trySelect(cfg, i);
+				}
+				const auto tmpPriority = profile->ValidatePriority(a_target);
+				if (tmpPriority == ConditionPriority::None) {
+					continue;
+				}
+				const auto pVal = std::to_underlying(priority), tmpVal = std::to_underlying(tmpPriority);
+				if (tmpVal < pVal) {
+					priority = tmpPriority;
+					candidates = { profile.get() };
+				} else if (tmpVal == pVal) {
+					candidates.push_back(profile.get());
 				}
 			}
+			selectedProfiles[i] = candidates.empty() ? nullptr : Random::draw(candidates);
 		}
 
 		cache[a_target->formID] = selectedProfiles;
 		return selectedProfiles;
 	}
 
-	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId)
+	bool Distribution::ApplyProfile(RE::Actor* a_target, const std::string& a_profileId, ProfileIndex a_type)
 	{
-		auto it = textures.find(a_textureId);
-		if (it != textures.end() && it->second.IsApplicable(a_target)) {
-			cache[a_target->formID][ProfileIndex::TextureId] = &it->second;
+		auto it = profileMap[a_type].find(a_profileId);
+		if (it != profileMap[a_type].end() && it->second.get()->IsApplicable(a_target)) {
+			cache[a_target->formID][a_type] = it->second.get();
 			excludedForms.erase(a_target->formID);
 			a_target->DoReset3D(false);
 			return true;
@@ -113,42 +95,51 @@ namespace DBD
 		return false;
 	}
 
+	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId)
+	{
+		return ApplyProfile(a_target, a_textureId, ProfileIndex::Textures);
+	}
+
 	bool Distribution::ApplySliderProfile(RE::Actor* a_target, const std::string& a_sliderId)
 	{
-		auto it = sliders.find(a_sliderId);
-		if (it != sliders.end() && it->second.IsApplicable(a_target)) {
-			cache[a_target->formID][ProfileIndex::SliderId] = &it->second;
-			excludedForms.erase(a_target->formID);
-			a_target->DoReset3D(true);
-			return true;
+		return ApplyProfile(a_target, a_sliderId, ProfileIndex::Sliders);
+	}
+
+	void Distribution::ForEachProfile(const std::function<void(const ProfileBase*)>& a_callback, ProfileIndex a_type) const
+	{
+		const auto& source = profileMap[a_type];
+		for (const auto& [id, profile] : source) {
+			a_callback(profile.get());
 		}
-		return false;
 	}
 
 	void Distribution::ForEachTextureProfile(const std::function<void(const TextureProfile*)>& a_callback) const
 	{
-		if (!a_callback) {
-			return;
-		}
-		for (const auto& [id, profile] : textures) {
-			a_callback(&profile);
-		}
+		ForEachProfile([&](const ProfileBase* profile) {
+			a_callback(static_cast<const TextureProfile*>(profile));
+		},
+			ProfileIndex::Textures);
 	}
 
 	void Distribution::ForEachSliderProfile(const std::function<void(const SliderProfile*)>& a_callback) const
 	{
-		if (!a_callback) {
-			return;
-		}
-		for (const auto& [id, profile] : sliders) {
-			a_callback(&profile);
-		}
+		ForEachProfile([&](const ProfileBase* profile) {
+			a_callback(static_cast<const SliderProfile*>(profile));
+		},
+			ProfileIndex::Sliders);
 	}
 
-	const Distribution::ProfileArray& Distribution::GetProfiles(RE::Actor* a_target)
+	Distribution::ProfileArray<const ProfileBase*> Distribution::GetProfiles(RE::Actor* a_target) const
 	{
 		const auto it = cache.find(a_target->formID);
-		return it != cache.end() ? it->second : (cache[a_target->formID] = ProfileArray{});
+		if (it != cache.end()) {
+			ProfileArray<const ProfileBase*> result{};
+			for (size_t i = 0; i < it->second.size(); ++i) {
+				result[i] = it->second[i];
+			}
+			return result;
+		}
+		return ProfileArray<const ProfileBase*>{};
 	}
 
 	void Distribution::ClearProfiles(RE::Actor* a_target, bool a_exclude)
@@ -173,15 +164,15 @@ namespace DBD
 				if (!folder.is_directory())
 					continue;
 				try {
-					TextureProfile profile{ folder };
-					auto name = profile.GetName();
-					textures.emplace(std::make_pair(name, profile));
+					auto profile = std::make_unique<TextureProfile>(folder);
+					auto name = std::string{ profile->GetName() };
+					profileMap[ProfileIndex::Textures][name] = std::move(profile);
 					logger::info("Added Texture Set: {}", name);
 				} catch (const std::exception& e) {
 					logger::error("Failed to add Texture Set: {}. Error: {}", folder.path().filename().string(), e.what());
 				}
 			}
-			logger::info("Loaded {} Texture Sets", textures.size());
+			logger::info("Loaded {} Texture Sets", profileMap[ProfileIndex::Textures].size());
 		}
 	}
 
@@ -207,15 +198,15 @@ namespace DBD
 					continue;
 				}
 				try {
-					SliderProfile profile{ file.path().string(), (type == "male"s), morphInterface };
-					auto name = profile.GetName();
-					sliders.emplace(std::make_pair(name, profile));
+					auto profile = std::make_unique<SliderProfile>(file.path().string(), (type == "male"s), morphInterface);
+					auto name = std::string{ profile->GetName() };
+					profileMap[ProfileIndex::Sliders][name] = std::move(profile);
 					logger::info("Added Slider Set: {}", name);
 				} catch (const std::exception& e) {
 					logger::error("Failed to add Slider Set: {}. Error: {}", fileName, e.what());
 				}
 			}
-			logger::info("Loaded {} Slider Sets ({})", sliders.size(), type);
+			logger::info("Loaded {} Slider Sets ({})", profileMap[ProfileIndex::Sliders].size(), type);
 		}
 	}
 
@@ -236,109 +227,80 @@ namespace DBD
 			}
 			try {
 				YAML::Node config = YAML::LoadFile(file.path().string());
-				DistributionConfig configuration;
-
-				if (auto target = config["Target"]) {
-					auto parseFormList = [&]<class T>(const YAML::Node& node, std::vector<T>& out) {
-						if (node && node.IsSequence()) {
-							for (const auto& val : node) {
-								auto formStr = val.as<std::string>();
-								if (formStr == "*") {
-									configuration.wildcards.set(DistributionConfig::Wildcard::Condition);
-								}
-								T form;
-								if constexpr (std::is_same_v<T, RE::FormID>) {
-									form = Util::FormFromString(formStr);
-								} else {
-									form = Util::FormFromString<T>(formStr);
-								}
-								if (form) {
-									out.push_back(form);
-								} else {
-									logger::warn("Invalid form ID: {}", formStr);
-								}
-							}
-						}
-					};
-					parseFormList(target["Reference"], configuration.references);
-					parseFormList(target["ActorBase"], configuration.actorBases);
-					parseFormList(target["Keyword"], configuration.keywords);
-					parseFormList(target["Faction"], configuration.factions);
-					parseFormList(target["Race"], configuration.races);
-				}
-
-				auto parseProfileList = [&]<class T>(const YAML::Node& node, std::vector<ProfileBase*>& out, const std::map<std::string, T, StringComparator>& source) -> bool {
-					if (!node || !node.IsSequence()) {
-						return false;
-					}
-					for (const auto& val : node) {
-						const auto valStr = val.as<std::string>();
-						if (valStr == "*") {
-							return true;
-						}
-						const auto& profileObj = source.find(valStr);
-						if (profileObj != source.end()) {
-							out.push_back(const_cast<T*>(&profileObj->second));
-						} else {
-							logger::warn("Profile '{}' not found in any profile", valStr);
-						}
-					}
-					return false;
-				};
-
-				if (auto sliderNode = config["Sliders"]) {
-					auto& vec = configuration.profiles[ProfileIndex::SliderId];
-					if (parseProfileList(sliderNode, vec, sliders)) {
-						configuration.wildcards.set(DistributionConfig::Wildcard::Sliders);
-						vec.clear();
-					}
-				}
-
-				if (auto textureNode = config["Textures"]) {
-					auto& vec = configuration.profiles[ProfileIndex::TextureId];
-					if (parseProfileList(textureNode, vec, textures)) {
-						configuration.wildcards.set(DistributionConfig::Wildcard::Textures);
-						vec.clear();
-					}
-				}
-
-				if (configuration.profiles[ProfileIndex::SliderId].empty() && configuration.profiles[ProfileIndex::TextureId].empty() &&
-					configuration.wildcards.none(DistributionConfig::Wildcard::Sliders, DistributionConfig::Wildcard::Textures)) {
-					logger::error("Configuration '{}' has no valid sliders or textures", fileName);
+				auto target = config["Target"];
+				if (!target.IsDefined()) {
+					logger::warn("Target is not defined in configuration file '{}'", fileName);
 					continue;
 				}
+				ConditionData conditions;
+				auto parseFormList = [&]<class T>(const YAML::Node& node, std::vector<T>& out) {
+					if (node && node.IsSequence()) {
+						for (const auto& val : node) {
+							auto formStr = val.as<std::string>();
+							if (formStr == "*") {
+								conditions.referenceWildcard = true;
+							}
+							T form;
+							if constexpr (std::is_same_v<T, RE::FormID>) {
+								form = Util::FormFromString(formStr);
+							} else {
+								form = Util::FormFromString<T>(formStr);
+							}
+							if (form) {
+								out.push_back(form);
+							} else {
+								logger::warn("Invalid form ID: {}", formStr);
+							}
+						}
+					}
+				};
+				parseFormList(target["Reference"], conditions.references);
+				parseFormList(target["ActorBase"], conditions.actorBases);
+				parseFormList(target["Keyword"], conditions.keywords);
+				parseFormList(target["Faction"], conditions.factions);
+				parseFormList(target["Race"], conditions.races);
 
-				configurations.emplace_back(std::move(configuration));
-				logger::info("Loaded configuration: {}", fileName);
+				bool isEmpty = true;
+				for (size_t i = 0; i < ProfileIndex::Total; i++) {
+					const auto indexKey = magic_enum::enum_name(static_cast<ProfileIndex>(i));
+					const auto profileNode = config[indexKey.data()];
+					if (!profileNode.IsDefined() || !profileNode.IsSequence()) {
+						continue;
+					}
+					const auto& source = profileMap[i];
+					std::vector<ProfileBase*> vec{};
+					for (const auto& val : profileNode) {
+						const auto valStr = val.as<std::string>();
+						if (valStr == "*") {
+							vec.clear();
+							vec.reserve(source.size());
+							for (auto&& [id, profile] : source) {
+								vec.push_back(profile.get());
+							}
+						} else {
+							const auto& profileObj = source.find(valStr);
+							if (profileObj != source.end()) {
+								vec.push_back(profileObj->second.get());
+							} else {
+								logger::warn("Profile '{}' not found in any profile", valStr);
+							}
+						}
+					}
+					isEmpty &= vec.empty();
+					std::for_each(vec.begin(), vec.end(), [&](ProfileBase* profile) {
+						profile->AppendConditions(conditions);
+					});
+				}
+				if (isEmpty) {
+					logger::error("Configuration '{}' has no valid sliders or textures. Configuration will not be loaded", fileName);
+				} else {
+					logger::info("Loaded configuration: {}", fileName);
+				}
 			} catch (const YAML::Exception& e) {
 				logger::error("Failed to parse configuration file '{}': {}", fileName, e.what());
 				continue;
 			}
 		}
-		logger::info("Loaded {} configurations", configurations.size());
-	}
-
-	Distribution::DistributionConfig::MatchLevel Distribution::DistributionConfig::GetApplicationLevel(RE::Actor* a_target) const
-	{
-		if (wildcards.any(Wildcard::Condition)) {
-			return MatchLevel::Wildcard;  // Wildcard condition matches all actors
-		}
-		if (std::ranges::contains(references, a_target->GetFormID()))
-			return MatchLevel::Explicit;
-		const auto base = a_target->GetActorBase();
-		if (base && std::ranges::contains(actorBases, base->GetFormID()))
-			return MatchLevel::Explicit;
-		const auto race = a_target->GetRace();
-		if (race && std::ranges::contains(races, race->GetFormID()))
-			return MatchLevel::Explicit;
-		if (a_target->HasKeywordInArray(keywords, false))
-			return MatchLevel::Explicit;
-		if (std::ranges::any_of(factions, [&](const RE::TESFaction* faction) {
-				return a_target->IsInFaction(faction);
-			})) {
-			return MatchLevel::Explicit;
-		}
-		return MatchLevel::None;
 	}
 
 	void Distribution::Save(SKSE::SerializationInterface* a_intfc, uint32_t)
@@ -384,24 +346,11 @@ namespace DBD
 					logger::error("Failed to load reg: {}", cacheValue);
 					continue;
 				}
-				auto assignProfile = [&]<class T>(T& profiles) {
-					auto it = profiles.find(cacheValue);
-					if (it != profiles.end()) {
-						cacheEntry[n] = &it->second;
-					} else if (!cacheValue.empty()) {
-						logger::error("Failed to load profile: {}", cacheValue);
-					}
-				};
-				switch (n) {
-				case ProfileIndex::SliderId:
-					assignProfile(sliders);
-					break;
-				case ProfileIndex::TextureId:
-					assignProfile(textures);
-					break;
-				default:
-					logger::warn("Unknown ProfileIndex: {}", n);
-					break;
+				auto it = profileMap[n].find(cacheValue);
+				if (it != profileMap[n].end()) {
+					cacheEntry[n] = it->second.get();
+				} else if (!cacheValue.empty()) {
+					logger::error("Failed to load profile: {}", cacheValue);
 				}
 			}
 		}
@@ -451,7 +400,7 @@ namespace DBD
 			return;
 		}
 		const auto& profiles = cacheEntry->second;
-		const auto& textureProfile = static_cast<TextureProfile*>(profiles[ProfileIndex::TextureId]);
+		const auto& textureProfile = static_cast<const TextureProfile*>(profiles[ProfileIndex::Textures]);
 		if (!textureProfile) {
 			return;
 		}

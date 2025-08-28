@@ -2,6 +2,25 @@
 
 namespace DBD
 {
+	enum class ConditionPriority
+	{
+		Reference,
+		ActorBase,
+		Group,
+		Wildcard,
+		None
+	};
+
+	struct ConditionData
+	{
+		bool referenceWildcard;
+		std::vector<RE::FormID> references;
+		std::vector<RE::FormID> actorBases;
+		std::vector<RE::TESRace*> races;
+		std::vector<RE::BGSKeyword*> keywords;
+		std::vector<RE::TESFaction*> factions;
+	};
+
 	class ProfileBase
 	{
 	public:
@@ -14,9 +33,13 @@ namespace DBD
 				throw std::runtime_error("Profile name is empty");
 			}
 		}
+		virtual ~ProfileBase() = default;
 
 		RE::BSFixedString GetName() const { return name; }
 		bool IsPrivate() const { return isPrivate; }
+
+		void AppendConditions(const ConditionData& condition);
+		ConditionPriority ValidatePriority(RE::Actor* a_target) const;
 
 		virtual void Apply(RE::Actor* a_target) const = 0;
 		virtual bool IsApplicable(RE::Actor* a_target) const = 0;
@@ -24,5 +47,44 @@ namespace DBD
 	protected:
 		RE::BSFixedString name;
 		bool isPrivate;
+
+		ConditionData conditionData;
 	};
+
+	inline void ProfileBase::AppendConditions(const ConditionData& condition)
+	{
+		conditionData.referenceWildcard |= condition.referenceWildcard;
+		const auto append_unique = [](auto& dest, const auto& src) {
+			for (const auto& item : src) {
+				if (!std::ranges::contains(dest, item)) {
+					dest.push_back(item);
+				}
+			}
+		};
+		append_unique(conditionData.references, condition.references);
+		append_unique(conditionData.actorBases, condition.actorBases);
+		append_unique(conditionData.races, condition.races);
+		append_unique(conditionData.keywords, condition.keywords);
+		append_unique(conditionData.factions, condition.factions);
+	}
+
+	inline ConditionPriority ProfileBase::ValidatePriority(RE::Actor* a_target) const
+	{
+		const auto formId = a_target->GetFormID();
+		if (std::ranges::contains(conditionData.references, formId)) {
+			return ConditionPriority::Reference;
+		}
+		const auto npc = a_target->GetActorBase();
+		const auto npcId = npc ? npc->GetFormID() : RE::FormID{ 0 };
+		if (std::ranges::contains(conditionData.actorBases, npcId)) {
+			return ConditionPriority::ActorBase;
+		}
+		if (std::ranges::any_of(conditionData.races, [&](RE::TESRace* race) { return race == npc->GetRace(); }) ||
+			std::ranges::any_of(conditionData.factions, [&](RE::TESFaction* faction) { return a_target->IsInFaction(faction); }) ||
+			a_target->HasKeywordInArray(conditionData.keywords, false)) {
+			return ConditionPriority::Group;
+		}
+		return conditionData.referenceWildcard ? ConditionPriority::Wildcard : ConditionPriority::None;
+	}
+
 }  // namespace DBD

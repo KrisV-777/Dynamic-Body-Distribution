@@ -27,8 +27,7 @@ namespace DBD
 
 		void ApplyHeadTexture(RE::Actor* a_target) const;
 		void ApplySkinTexture(RE::Actor* a_target) const;
-
-		void HandleOnAttach(RE::NiAVObject* a_object);
+		void HandleOnAttach(RE::NiAVObject* a_object) const;
 
 	private:
 		void FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const;

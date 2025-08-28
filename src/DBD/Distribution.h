@@ -19,53 +19,29 @@ namespace DBD
 	public:
 		enum ProfileIndex
 		{
-			TextureId,
-			SliderId,
+			Textures,
+			Sliders,
 
 			Total_V1,
 			Total = Total_V1
 		};
-		using ProfileArray = std::array<ProfileBase*, ProfileIndex::Total>;
-
-		struct DistributionConfig
-		{
-			enum class MatchLevel
-			{
-				None,
-				Wildcard,
-				Explicit
-			};
-
-			enum class Wildcard
-			{
-				Condition = 1 << 0,
-				Textures = 1 << 1,
-				Sliders = 1 << 2,
-			};
-			REX::EnumSet<Wildcard> wildcards;
-
-			std::vector<RE::FormID> references;
-			std::vector<RE::FormID> actorBases;
-			std::vector<RE::FormID> races;
-			std::vector<RE::BGSKeyword*> keywords;
-			std::vector<RE::TESFaction*> factions;
-			std::array<std::vector<ProfileBase*>, ProfileIndex::Total> profiles;
-
-			MatchLevel GetApplicationLevel(RE::Actor* a_target) const;
-		};
+		template <class T>
+		using ProfileArray = std::array<T, ProfileIndex::Total>;
 
 	public:
 		void Initialize();
 
-		ProfileArray SelectProfiles(RE::Actor* a_target);
+		ProfileArray<const ProfileBase*> SelectProfiles(RE::Actor* a_target);
 
+		bool ApplyProfile(RE::Actor* a_target, const std::string& a_profileId, ProfileIndex a_type);
 		bool ApplyTextureProfile(RE::Actor* a_target, const std::string& a_textureId);
 		bool ApplySliderProfile(RE::Actor* a_target, const std::string& a_sliderId);
 
+		void ForEachProfile(const std::function<void(const ProfileBase*)>& a_callback, ProfileIndex a_type) const;
 		void ForEachTextureProfile(const std::function<void(const TextureProfile*)>& a_callback) const;
 		void ForEachSliderProfile(const std::function<void(const SliderProfile*)>& a_callback) const;
 
-		const ProfileArray& GetProfiles(RE::Actor* a_target);
+		ProfileArray<const ProfileBase*> GetProfiles(RE::Actor* a_target) const;
 		void ClearProfiles(RE::Actor* a_target, bool a_exclude);
 
 	public:
@@ -84,13 +60,11 @@ namespace DBD
 		void LoadConditions();
 
 	private:
-		std::vector<DistributionConfig> configurations;
-		std::map<std::string, TextureProfile, StringComparator> textures;
-		std::map<std::string, SliderProfile, StringComparator> sliders;
+		ProfileArray<std::map<std::string, std::unique_ptr<ProfileBase>, StringComparator>> profileMap;
+		std::map<RE::FormID, ProfileArray<const ProfileBase*>> cache;
 
 		RE::SEX playerSexPreChargen;
 		std::set<RE::FormID> excludedForms;
-		std::map<RE::FormID, ProfileArray> cache;
 
 		SKEE::IActorUpdateManager* actorUpdateManager;
 		SKEE::IBodyMorphInterface* morphInterface;
