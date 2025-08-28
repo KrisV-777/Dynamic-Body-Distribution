@@ -8,7 +8,7 @@ namespace DBD
 		ProfileBase(a_textureFolder.path().filename().string())
 	{
 		logger::info("Creating texture-set: {}", name);
-		const auto profilePrefix(std::format("DBD/{}", name.c_str()));
+		const auto profilePrefix(std::format("DBD/{}{}", isPrivate ? "." : "", name.c_str()));
 		for (auto& file : fs::recursive_directory_iterator{ a_textureFolder }) {
 			if (!file.is_regular_file())
 				continue;
