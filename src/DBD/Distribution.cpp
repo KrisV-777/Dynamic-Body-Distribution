@@ -275,6 +275,8 @@ SkipCaching:
 							vec.clear();
 							vec.reserve(source.size());
 							for (auto&& [id, profile] : source) {
+								if (profile->IsPrivate())
+									continue;
 								vec.push_back(profile.get());
 							}
 						} else {
