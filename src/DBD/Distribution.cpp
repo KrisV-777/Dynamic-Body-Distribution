@@ -28,8 +28,6 @@ namespace DBD
 		const auto player = RE::PlayerCharacter::GetSingleton();
 		const auto playerNPC = player->GetActorBase();
 		playerSexPreChargen = playerNPC ? playerNPC->GetSex() : RE::SEX::kMale;
-
-		// RE::UI::GetSingleton()->AddEventSink<RE::MenuOpenCloseEvent>(this);
 	}
 
 	Distribution::ProfileArray<const ProfileBase*> Distribution::SelectProfiles(RE::Actor* a_target)
@@ -44,9 +42,8 @@ namespace DBD
 			if (a_target->IsPlayerRef()) {
 				const auto npc = a_target->GetActorBase();
 				if (npc && npc->GetSex() != playerSexPreChargen) {
-					ClearProfiles(a_target, false);
-					playerSexPreChargen = npc->GetSex();
 					logger::info("Player sex changed from {} to {}", std::to_underlying(playerSexPreChargen), std::to_underlying(npc->GetSex()));
+					playerSexPreChargen = npc->GetSex();
 					goto SkipCaching;
 				}
 			}
@@ -364,27 +361,6 @@ SkipCaching:
 		cache.clear();
 	}
 
-	RE::BSEventNotifyControl Distribution::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
-	{
-		constexpr auto charGenMenu = RE::RaceSexMenu::MENU_NAME;
-		if (!a_event || a_event->menuName != charGenMenu) {
-			return RE::BSEventNotifyControl::kContinue;
-		}
-		const auto player = RE::PlayerCharacter::GetSingleton();
-		const auto playerNPC = player->GetActorBase();
-		if (!playerNPC) {
-			return RE::BSEventNotifyControl::kContinue;
-		}
-		const auto playerSex = playerNPC->GetSex();
-		if (a_event->opening) {
-			playerSexPreChargen = playerSex;
-		} else if (playerSex != playerSexPreChargen) {
-			ClearProfiles(player, false);
-			player->DoReset3D(false);
-		}
-		return RE::BSEventNotifyControl::kContinue;
-	}
-
 	void Distribution::OnAttach(
 		[[maybe_unused]] RE::TESObjectREFR* refr,
 		[[maybe_unused]] RE::TESObjectARMO* armor,
@@ -406,7 +382,7 @@ SkipCaching:
 		if (!textureProfile) {
 			return;
 		}
-		textureProfile->HandleOnAttach(object);
+		textureProfile->OverrideObjectTextures(object);
 	}
 
 }  // namespace DBD

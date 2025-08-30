@@ -38,8 +38,10 @@ namespace DBD
 		return std::string{};
 	}
 
-	void TextureProfile::FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const
+	RE::BSTextureSet* TextureProfile::CreateOverwriteTextureSet(RE::BSTextureSet* a_sourceSet) const
 	{
+		std::array<const char*, Texture::kTotal> texturePaths;
+		bool hasOverwritten = false;
 		constexpr auto DATA_PREFIX = "data"sv;
 		constexpr auto TEXTURE_PREFIX = "textures"sv;
 		for (size_t i = 0; i < Texture::kTotal; i++) {
@@ -53,11 +55,21 @@ namespace DBD
 				path = path.substr(TEXTURE_PREFIX.size() + 1);
 			}
 			if (const auto it = textures.find(path); it != textures.end()) {
-				a_targetSet->SetTexturePath(t, it->second.c_str());
+				texturePaths[i] = it->second.c_str();
+				hasOverwritten = true;
 			} else {
-				a_targetSet->SetTexturePath(t, pathCStr);
+				texturePaths[i] = pathCStr;
 			}
 		}
+		if (!hasOverwritten)
+			return nullptr;
+		const auto materialTextureNew = RE::BSShaderTextureSet::Create();
+		if (!materialTextureNew)
+			return nullptr;
+		for (size_t i = 0; i < Texture::kTotal; i++) {
+			materialTextureNew->SetTexturePath(static_cast<Texture>(i), texturePaths[i]);
+		}
+		return materialTextureNew;
 	}
 
 	bool TextureProfile::IsApplicable(RE::Actor* a_target) const
@@ -88,168 +100,149 @@ namespace DBD
 
 	void TextureProfile::Apply(RE::Actor* a_target) const
 	{
-		SKSE::GetTaskInterface()->AddTask([=]() {
-			a_target->DoReset3D(false);
+		logger::info("Applying texture profile {} to actor {}", name.data(), a_target->formID);
+		const auto faceNode = a_target->GetFaceNodeSkinned();
+		const auto bodyNode = a_target->Get3D();
+		if (!faceNode) {
+			logger::error("Actor {} has no face node", a_target->formID);
+			return;
+		} else if (!bodyNode) {
+			logger::error("Actor {} has no body node", a_target->formID);
+			return;
+		}
+		OverrideObjectTextures(faceNode);
+		OverrideObjectTextures(bodyNode);
+	}
+
+	void TextureProfile::OverrideObjectTextures(RE::NiAVObject* a_object) const
+	{
+		using VisitControl = RE::BSVisit::BSVisitControl;
+		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) {
+			auto effect = a_geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
+			auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
+			if (!lightingShader) {
+				return VisitControl::kContinue;
+			}
+			const auto material = static_cast<MaterialBase*>(lightingShader->material);
+			if (material->materialAlpha < 1.f / 255.f) {
+				return VisitControl::kContinue;
+			}
+			const auto feature = material->GetFeature();
+			constexpr std::array supportedFeatures{
+				Feature::kDefault,
+				Feature::kEnvironmentMap,
+				Feature::kEye,
+				Feature::kFaceGen,
+				Feature::kFaceGenRGBTint,
+				Feature::kGlowMap,
+				Feature::kHairTint,
+				// No clue if Skyrim even supports that for armor/body meshes, but meh...
+				Feature::kMultilayerParallax,
+				Feature::kParallax
+			};
+			if (!std::ranges::contains(supportedFeatures, feature)) {
+				logger::error("Unsupported material feature: {}", magic_enum::enum_name(feature));
+				return VisitControl::kContinue;
+			}
+			const auto newMaterial = static_cast<MaterialBase*>(material->Create());
+			if (!newMaterial) {
+				return VisitControl::kContinue;
+			}
+			newMaterial->CopyMembers(material);
+			newMaterial->ClearTextures();
+
+			const auto materialTexture = material->GetTextureSet();
+			const auto materialTextureNew = CreateOverwriteTextureSet(materialTexture.get());
+			if (!materialTextureNew) {
+				return VisitControl::kContinue;
+			}
+			newMaterial->OnLoadTextureSet(0, materialTextureNew);
+			switch (feature) {
+			case Feature::kEnvironmentMap:
+				{
+					const auto oldEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(material);
+					const auto newEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(newMaterial);
+					if (!newEnvMap->envTexture)
+						newEnvMap->envTexture = oldEnvMap->envTexture;
+					if (!newEnvMap->envMaskTexture) {
+						newEnvMap->envMaskTexture = oldEnvMap->envMaskTexture;
+					}
+				}
+				break;
+			case Feature::kEye:
+				{
+					const auto oldEye = static_cast<RE::BSLightingShaderMaterialEye*>(material);
+					const auto newEye = static_cast<RE::BSLightingShaderMaterialEye*>(newMaterial);
+					if (!newEye->envTexture)
+						newEye->envTexture = oldEye->envTexture;
+					if (!newEye->envMaskTexture) {
+						newEye->envMaskTexture = oldEye->envMaskTexture;
+					}
+				}
+				break;
+			case Feature::kFaceGen:
+				{
+					const auto oldFacegen = static_cast<MaterialFacegen*>(material);
+					const auto newFacegen = static_cast<MaterialFacegen*>(newMaterial);
+					if (!newFacegen->tintTexture)
+						newFacegen->tintTexture = oldFacegen->tintTexture;
+					if (!newFacegen->detailTexture) {
+						newFacegen->detailTexture = oldFacegen->detailTexture;
+					}
+				}
+				break;
+			case Feature::kFaceGenRGBTint:
+				{
+					const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(material);
+					const auto newFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(newMaterial);
+					newFacegen->tintColor = oldFacegen->tintColor;
+				}
+				break;
+			case Feature::kGlowMap:
+				{
+					const auto oldEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(material);
+					const auto newEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(newMaterial);
+					if (!newEye->glowTexture)
+						newEye->glowTexture = oldEye->glowTexture;
+				}
+				break;
+			case Feature::kHairTint:
+				{
+					const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(material);
+					const auto newFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(newMaterial);
+					newFacegen->tintColor = oldFacegen->tintColor;
+				}
+				break;
+			case Feature::kMultilayerParallax:
+				{
+					const auto oldParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(material);
+					const auto newParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(newMaterial);
+					if (!newParallax->layerTexture)
+						newParallax->layerTexture = oldParallax->layerTexture;
+					if (!newParallax->envTexture)
+						newParallax->envTexture = oldParallax->envTexture;
+					if (!newParallax->envMaskTexture)
+						newParallax->envMaskTexture = oldParallax->envMaskTexture;
+				}
+				break;
+			case Feature::kParallax:
+				{
+					const auto oldParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(material);
+					const auto newParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(newMaterial);
+					if (!newParallax->heightTexture)
+						newParallax->heightTexture = oldParallax->heightTexture;
+				}
+				break;
+			}
+			lightingShader->SetMaterial(newMaterial, true);
+			lightingShader->SetupGeometry(a_geometry);
+			lightingShader->FinishSetupGeometry(a_geometry);
+
+			newMaterial->~BSLightingShaderMaterialBase();
+			RE::free(newMaterial);
+
+			return VisitControl::kContinue;
 		});
-	}
-
-	void TextureProfile::ApplyHeadTexture(RE::Actor* a_target) const
-	{
-		logger::info("Applying head texture to actor: {}", a_target->formID);
-		const auto headPart = a_target->GetHeadPartObject(RE::BGSHeadPart::HeadPartType::kFace);
-		const auto geometry = headPart ? headPart->AsGeometry() : nullptr;
-		if (!geometry) {
-			logger::error("Actor {} has no head part geometry", a_target->GetName());
-			return;
-		}
-
-		auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
-		auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
-		if (!lightingShader) {
-			logger::error("Actor {} has no lighting shader on head part", a_target->GetName());
-			return;
-		}
-		const auto material = static_cast<MaterialBase*>(lightingShader->material);
-		const auto feature = material->GetFeature();
-		if (feature != Feature::kFaceGen && feature != Feature::kFaceGenRGBTint) {
-			logger::error("Actor {} head material is not FaceGen", a_target->GetName());
-			return;
-		}
-
-		const auto newMaterial = static_cast<MaterialBase*>(material->Create());
-		if (!newMaterial) {
-			logger::error("Actor {} failed to create new material for texture application", a_target->GetName());
-			return;
-		}
-		newMaterial->CopyMembers(material);
-		newMaterial->ClearTextures();
-
-		const auto materialTexture = material->GetTextureSet();
-		const auto materialTextureNew = RE::BSShaderTextureSet::Create();
-		if (!materialTextureNew) {
-			logger::error("Actor {} failed to create texture set", a_target->GetName());
-			return;
-		}
-
-		FillTextureSet(materialTexture.get(), materialTextureNew);
-		newMaterial->OnLoadTextureSet(0, materialTextureNew);
-
-		if (feature == Feature::kFaceGen) {
-			const auto oldFacegen = static_cast<MaterialFacegen*>(material);
-			const auto newFacegen = static_cast<MaterialFacegen*>(newMaterial);
-			if (!newFacegen->tintTexture)
-				newFacegen->tintTexture = oldFacegen->tintTexture;
-			if (!newFacegen->detailTexture)
-				newFacegen->detailTexture = oldFacegen->detailTexture;
-		}
-
-		lightingShader->SetMaterial(newMaterial, true);
-		lightingShader->SetupGeometry(geometry);
-		lightingShader->FinishSetupGeometry(geometry);
-
-		newMaterial->~BSLightingShaderMaterialBase();
-		RE::free(newMaterial);
-	}
-
-	void TextureProfile::ApplySkinTexture(RE::Actor* a_target) const
-	{
-		const auto skin = a_target->GetSkin();
-		if (!skin) {
-			logger::error("No skin found for Character: {}", a_target->formID);
-			return;
-		}
-
-		const auto factory = RE::IFormFactory::GetConcreteFormFactoryByType<RE::TESObjectARMO>();
-		const auto factoryARMA = RE::IFormFactory::GetConcreteFormFactoryByType<RE::TESObjectARMA>();
-		const auto factoryTexture = RE::IFormFactory::GetConcreteFormFactoryByType<RE::BGSTextureSet>();
-		auto newSkin = factory ? factory->Create() : nullptr;
-		if (!newSkin || !factoryARMA || !factoryTexture) {
-			logger::error("Failed to create duplicate skin for Character: {}", a_target->formID);
-			return;
-		}
-		newSkin->Copy(skin);
-
-		const auto base = a_target->GetActorBase();
-		if (!base) {
-			logger::error("No ActorBase found for Character: {}", a_target->formID);
-			return;
-		}
-		const auto sex = base->GetSex();
-		const auto race = base->GetRace();
-
-		for (auto& arma : newSkin->armorAddons) {
-			if (!arma || !arma->IsValidRace(race))
-				continue;
-			auto& armaTextures = arma->skinTextures[sex];
-			auto newArma = factoryARMA->Create();
-			if (!newArma || !armaTextures) {
-				logger::error("Failed to create duplicate body for ArmorAddon: {}", arma->formID);
-				continue;
-			}
-			newArma->data = arma->data;
-			newArma->race = arma->race;
-			newArma->bipedModel1stPersons[RE::SEX::kMale] = arma->bipedModel1stPersons[RE::SEX::kMale];
-			newArma->bipedModel1stPersons[RE::SEX::kFemale] = arma->bipedModel1stPersons[RE::SEX::kFemale];
-			newArma->bipedModels[RE::SEX::kMale] = arma->bipedModels[RE::SEX::kMale];
-			newArma->bipedModels[RE::SEX::kFemale] = arma->bipedModels[RE::SEX::kFemale];
-			newArma->skinTextures[RE::SEX::kMale] = arma->skinTextures[RE::SEX::kMale];
-			newArma->skinTextures[RE::SEX::kFemale] = arma->skinTextures[RE::SEX::kFemale];
-			newArma->bipedModelData = arma->bipedModelData;
-			newArma->additionalRaces = arma->additionalRaces;
-			newArma->footstepSet = arma->footstepSet;
-			const auto newTexture = factoryTexture->Create();
-			if (!newTexture) {
-				logger::error("Failed to create duplicate texture for ArmorAddon: {}", arma->formID);
-				continue;
-			}
-			newTexture->flags = armaTextures->flags;
-
-			FillTextureSet(armaTextures, newTexture);
-			newArma->skinTextures[sex] = newTexture;
-			arma = newArma;
-		}
-		base->skin = newSkin;
-		a_target->Update3DModel();
-	}
-
-	void TextureProfile::HandleOnAttach(RE::NiAVObject* object) const
-	{
-		const auto geometry = object->AsGeometry();
-		if (!geometry) {
-			return;
-		}
-		auto effect = geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
-		auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
-		if (!lightingShader) {
-			return;
-		}
-		const auto material = static_cast<MaterialBase*>(lightingShader->material);
-		const auto feature = material->GetFeature();
-		if (feature != Feature::kFaceGenRGBTint) {
-			return;
-		}
-		const auto newMaterial = static_cast<MaterialBase*>(material->Create());
-		if (!newMaterial) {
-			return;
-		}
-		newMaterial->CopyMembers(material);
-		newMaterial->ClearTextures();
-
-		const auto materialTexture = material->GetTextureSet();
-		const auto materialTextureNew = RE::BSShaderTextureSet::Create();
-		if (!materialTextureNew) {
-			return;
-		}
-
-		FillTextureSet(materialTexture.get(), materialTextureNew);
-		newMaterial->OnLoadTextureSet(0, materialTextureNew);
-
-		lightingShader->SetMaterial(newMaterial, true);
-		lightingShader->SetupGeometry(geometry);
-		lightingShader->FinishSetupGeometry(geometry);
-
-		newMaterial->~BSLightingShaderMaterialBase();
-		RE::free(newMaterial);
 	}
 
 }  // namespace DBD

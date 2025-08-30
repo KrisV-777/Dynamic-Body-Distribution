@@ -24,13 +24,10 @@ namespace DBD
 
 		void Apply(RE::Actor* a_target) const override;
 		bool IsApplicable(RE::Actor* a_target) const override;
-
-		void ApplyHeadTexture(RE::Actor* a_target) const;
-		void ApplySkinTexture(RE::Actor* a_target) const;
-		void HandleOnAttach(RE::NiAVObject* a_object) const;
+		void OverrideObjectTextures(RE::NiAVObject* a_object) const;
 
 	private:
-		void FillTextureSet(RE::BSTextureSet* a_sourceSet, RE::BSTextureSet* a_targetSet) const;
+		RE::BSTextureSet* CreateOverwriteTextureSet(RE::BSTextureSet* a_sourceSet) const;
 		static std::string GetSubfolderKey(std::string a_path);
 
 	private:

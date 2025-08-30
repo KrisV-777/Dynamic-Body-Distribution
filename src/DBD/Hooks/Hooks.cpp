@@ -40,32 +40,16 @@ namespace DBD
 
 	void Hooks::DoReset3D(RE::Actor& a_this, bool a_updateWeight)
 	{
+		_DoReset3D(a_this, a_updateWeight);
+
 		logger::info("Resetting 3D for Actor: {}", a_this.formID);
 		const auto dist = DBD::Distribution::GetSingleton();
 		const auto profiles = dist->SelectProfiles(&a_this);
 
-		using Index = Distribution::ProfileIndex;
-		for (size_t i = 0; i < Index::Total; i++) {
-			if (!profiles[i])
-				continue;
-			if (i == Index::Textures) {
-				/*	Textures have their application split, as applying body textures requires a full 3D resets AFTER the update.
-					However, this reset will also undo any texture overwrites on the model itself (such as face textures). It is possible
-					to update body textures on the model itself, however doing so requires the body textures to be updated every time the
-					model changes, thus requiring additional hooks and updates, which I want to avoid to keep invasiveness to a minimum.
-				*/
-				const auto& textureProfile = static_cast<const TextureProfile*>(profiles[i]);
-				textureProfile->ApplySkinTexture(&a_this);
-				_DoReset3D(a_this, a_updateWeight);
-				textureProfile->ApplyHeadTexture(&a_this);
-			} else {
-				profiles[i]->Apply(&a_this);
+		for (auto&& profile : profiles) {
+			if (profile) {
+				profile->Apply(&a_this);
 			}
-		}
-
-		if (!profiles[Index::Textures]) {
-			// Dont reset 3d twice
-			_DoReset3D(a_this, a_updateWeight);
 		}
 	}
 
