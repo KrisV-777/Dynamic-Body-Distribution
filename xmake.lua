@@ -5,7 +5,7 @@ PROJECT_NAME = "DynamicBodyDistribution"
 
 -- Project
 set_project(PROJECT_NAME)
-set_version("0.2.0")
+set_version("0.3.0")
 set_languages("cxx23")
 set_license("apache-2.0")
 set_warnings("allextra", "error")
@@ -69,7 +69,7 @@ target(PROJECT_NAME)
     add_deps("commonlibsse-ng")
     add_rules("commonlibsse-ng.plugin", {
         name = PROJECT_NAME,
-        author = "Scrab",
+        author = "Kris",
         description = "Dynamically replace body textures and sliders"
     })
 
