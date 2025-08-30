@@ -9,8 +9,7 @@ namespace DBD
 {
 	class Distribution :
 		public Singleton<Distribution>,
-		public SKEE::IAddonAttachmentInterface,
-		public RE::BSTEventSink<RE::MenuOpenCloseEvent>
+		public SKEE::IAddonAttachmentInterface
 	{
 		static constexpr const char* TEXTURE_ROOT_PATH{ "Data\\Textures\\DBD" };
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
@@ -48,9 +47,6 @@ namespace DBD
 		void Save(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
 		void Load(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
 		void Revert(SKSE::SerializationInterface* a_intfc);
-
-	protected:
-		RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override;
 
 	private:
 		void OnAttach(RE::TESObjectREFR* refr, RE::TESObjectARMO* armor, RE::TESObjectARMA* addon, RE::NiAVObject* object, bool isFirstPerson, RE::NiNode* skeleton, RE::NiNode* root) override;
