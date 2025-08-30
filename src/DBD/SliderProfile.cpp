@@ -52,6 +52,7 @@ namespace DBD
 	void SliderProfile::Apply(RE::Actor* a_target) const
 	{
 		logger::info("Applying slider profile {} to {}", name.data(), a_target->formID);
+		transformInterface->ClearBodyMorphKeys(a_target, MORPH_KEY);
 		const auto base = a_target->GetActorBase();
 		const auto weight = base ? base->weight / 100.0f : 0.5f;
 		for (const auto& [sliderName, sliderValues] : sliders) {
