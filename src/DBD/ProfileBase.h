@@ -7,6 +7,7 @@ namespace DBD
 		Reference,
 		ActorBase,
 		Group,
+		Race,
 		Wildcard,
 		None
 	};
@@ -16,9 +17,9 @@ namespace DBD
 		bool referenceWildcard;
 		std::vector<RE::FormID> references;
 		std::vector<RE::FormID> actorBases;
-		std::vector<RE::TESRace*> races;
 		std::vector<RE::BGSKeyword*> keywords;
 		std::vector<RE::TESFaction*> factions;
+		std::vector<RE::TESRace*> races;
 	};
 
 	class ProfileBase
@@ -63,9 +64,9 @@ namespace DBD
 		};
 		append_unique(conditionData.references, condition.references);
 		append_unique(conditionData.actorBases, condition.actorBases);
-		append_unique(conditionData.races, condition.races);
 		append_unique(conditionData.keywords, condition.keywords);
 		append_unique(conditionData.factions, condition.factions);
+		append_unique(conditionData.races, condition.races);
 	}
 
 	inline ConditionPriority ProfileBase::ValidatePriority(RE::Actor* a_target) const
@@ -78,11 +79,11 @@ namespace DBD
 		const auto npcId = npc ? npc->GetFormID() : RE::FormID{ 0 };
 		if (std::ranges::contains(conditionData.actorBases, npcId)) {
 			return ConditionPriority::ActorBase;
-		}
-		if (std::ranges::any_of(conditionData.races, [&](RE::TESRace* race) { return race == npc->GetRace(); }) ||
-			std::ranges::any_of(conditionData.factions, [&](RE::TESFaction* faction) { return a_target->IsInFaction(faction); }) ||
-			a_target->HasKeywordInArray(conditionData.keywords, false)) {
+		} else if (std::ranges::any_of(conditionData.factions, [&](RE::TESFaction* faction) { return a_target->IsInFaction(faction); }) ||
+				   a_target->HasKeywordInArray(conditionData.keywords, false)) {
 			return ConditionPriority::Group;
+		} else if (std::ranges::any_of(conditionData.races, [&](RE::TESRace* race) { return race == npc->GetRace(); })) {
+			return ConditionPriority::Race;
 		}
 		return conditionData.referenceWildcard ? ConditionPriority::Wildcard : ConditionPriority::None;
 	}
