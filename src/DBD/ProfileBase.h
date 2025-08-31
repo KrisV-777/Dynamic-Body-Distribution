@@ -14,19 +14,19 @@ namespace DBD
 
 	struct ConditionData
 	{
-		bool referenceWildcard;
-		std::vector<RE::FormID> references;
-		std::vector<RE::FormID> actorBases;
-		std::vector<RE::BGSKeyword*> keywords;
-		std::vector<RE::TESFaction*> factions;
-		std::vector<RE::TESRace*> races;
+		bool referenceWildcard{ false };
+		std::vector<RE::FormID> references{};
+		std::vector<RE::FormID> actorBases{};
+		std::vector<RE::BGSKeyword*> keywords{};
+		std::vector<RE::TESFaction*> factions{};
+		std::vector<RE::TESRace*> races{};
 	};
 
 	class ProfileBase
 	{
 	public:
 		ProfileBase(RE::BSFixedString a_name, std::string_view extension = ""sv) :
-			name(std::move(a_name)), isPrivate(!name.empty() && name[0] == '.')
+			name(std::move(a_name)), isPrivate(!name.empty() && name[0] == '.'), conditionData()
 		{
 			std::string nameTmp{ name.c_str() };
 			name = nameTmp.substr(isPrivate, nameTmp.length() - extension.length() - isPrivate);
