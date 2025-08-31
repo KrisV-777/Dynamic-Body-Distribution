@@ -304,7 +304,7 @@ SkipCaching:
 
 	void Distribution::Save(SKSE::SerializationInterface* a_intfc, uint32_t)
 	{
-		const std::size_t numRegs = cache.size();
+		std::size_t numRegs = cache.size();
 		if (!a_intfc->WriteRecordData(numRegs)) {
 			logger::error("Failed to save number of regs ({})", numRegs);
 			return;
@@ -322,11 +322,24 @@ SkipCaching:
 				}
 			}
 		}
+
+		numRegs = excludedForms.size();
+		if (!a_intfc->WriteRecordData(numRegs)) {
+			logger::error("Failed to save number of excluded forms ({})", numRegs);
+			return;
+		}
+		for (const auto& formID : excludedForms) {
+			if (!a_intfc->WriteRecordData(formID)) {
+				logger::error("Failed to save excluded form ({:X})", formID);
+				continue;
+			}
+		}
 	}
 
 	void Distribution::Load(SKSE::SerializationInterface* a_intfc, uint32_t)
 	{
 		cache.clear();
+		excludedForms.clear();
 		size_t numRegs;
 		a_intfc->ReadRecordData(numRegs);
 
@@ -354,6 +367,17 @@ SkipCaching:
 			}
 		}
 		logger::info("Loaded {} cache entries", cache.size());
+
+		a_intfc->ReadRecordData(numRegs);
+		for (size_t i = 0; i < numRegs; i++) {
+			a_intfc->ReadRecordData(formID);
+			if (!a_intfc->ResolveFormID(formID, formID)) {
+				logger::warn("Error reading formID: {:X}", formID);
+				continue;
+			}
+			excludedForms.insert(formID);
+		}
+		logger::info("Loaded {} excluded forms", excludedForms.size());
 	}
 
 	void Distribution::Revert(SKSE::SerializationInterface*)
