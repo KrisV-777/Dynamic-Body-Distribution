@@ -230,8 +230,8 @@ SkipCaching:
 				continue;
 			}
 			try {
-				[[maybe_unused]] YAML::Node config = YAML::LoadFile(file.path().string());
-				// ConfigDatas.emplace_back(config, this);
+				YAML::Node config = YAML::LoadFile(file.path().string());
+				configurations.emplace_back(config, this);
 			} catch (const YAML::Exception& e) {
 				logger::error("Failed to parse ConfigData file '{}': {}", fileName, e.what());
 				continue;
