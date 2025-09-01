@@ -385,11 +385,11 @@ SkipCaching:
 		parseFormList(targetNode["Keyword"], keywords);
 		parseFormList(targetNode["Faction"], factions);
 		parseFormList(targetNode["Race"], races);
-		if (const auto conditionNode = targetNode["Condition"]) {
+		if (const auto conditionNode = targetNode["Conditions"]) {
 			const auto rawConditions = conditionNode.as<std::vector<std::string>>(std::vector<std::string>{});
 			conditions = Conditions::Conditional{
 				rawConditions,
-				a_node["refMap"].as<std::map<std::string, std::string>>(std::map<std::string, std::string>{})
+				a_node["RefMap"].as<std::map<std::string, std::string>>(std::map<std::string, std::string>{})
 			};
 		}
 		for (size_t i = 0; i < ProfileType::Total; i++) {
