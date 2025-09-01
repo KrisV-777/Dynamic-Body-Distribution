@@ -184,11 +184,8 @@ namespace DBD
 				{
 					const auto oldFacegen = static_cast<MaterialFacegen*>(material);
 					const auto newFacegen = static_cast<MaterialFacegen*>(newMaterial);
-					if (!newFacegen->tintTexture)
-						newFacegen->tintTexture = oldFacegen->tintTexture;
-					if (!newFacegen->detailTexture) {
-						newFacegen->detailTexture = oldFacegen->detailTexture;
-					}
+					newFacegen->tintTexture = oldFacegen->tintTexture;
+					newFacegen->detailTexture = oldFacegen->detailTexture;
 				}
 				break;
 			case Feature::kFaceGenRGBTint:
