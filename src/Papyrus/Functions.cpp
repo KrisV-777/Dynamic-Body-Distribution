@@ -1,6 +1,8 @@
 #include "Functions.h"
 
 #include "DBD/Distribution.h"
+#include "DBD/SliderProfile.h"
+#include "DBD/TextureProfile.h"
 
 namespace Papyrus
 {
@@ -64,7 +66,7 @@ namespace Papyrus
 		std::vector<RE::BSFixedString> profiles;
 		profiles.reserve(retVal.size());
 		std::transform(retVal.begin(), retVal.end(), std::back_inserter(profiles),
-			[](const auto* profile) { return profile ? profile->GetName() : ""; });
+			[](const auto& profile) { return profile ? profile->GetName() : ""; });
 		return profiles;
 	}
 
