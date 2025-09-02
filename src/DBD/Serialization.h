@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Util/Singleton.h"
-
 namespace DBD
 {
-	class Serialize final :
-		public Singleton<Serialize>
+	class Serialize final
 	{
+	public:
+		Serialize() = delete;
+
 	public:
 		enum : std::uint32_t
 		{
@@ -23,4 +23,4 @@ namespace DBD
 
 	std::string GetTypeName(uint32_t a_type);
 
-}  // namespace Serialize
+}  // namespace DBD
