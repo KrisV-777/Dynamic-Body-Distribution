@@ -5,6 +5,5 @@ build/
 /vcpkg_installed
 .xmake/
 dist/SKSE/Plugins/
-dist/SKSE/DBD/
 *.pex
 .release/
