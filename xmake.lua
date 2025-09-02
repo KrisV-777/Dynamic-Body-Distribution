@@ -5,7 +5,7 @@ PROJECT_NAME = "DynamicBodyDistribution"
 
 -- Project
 set_project(PROJECT_NAME)
-set_version("0.4.0")
+set_version("0.5.0")
 set_languages("cxx23")
 set_license("apache-2.0")
 set_warnings("allextra", "error")
