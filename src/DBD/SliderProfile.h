@@ -25,6 +25,7 @@ namespace DBD
 	{
 		using SliderRange = std::pair<int32_t, int32_t>;
 
+		constexpr static const char* ZERO_SLIDER_PRESET{ "- zeroed sliders -" };
 		constexpr static const char* MORPH_KEY = "DBD_Morph";
 
 	public:

@@ -38,10 +38,14 @@ namespace DBD
 			throw std::runtime_error(msg);
 		}
 		for (auto* preset = root->first_node("Preset"); preset; preset = preset->next_sibling("Preset")) {
+			const auto nameAttr = preset->first_attribute("name");
+			const auto nameStr = nameAttr ? nameAttr->value() : "unknown";
+			if (Util::CastLower(nameStr) == ZERO_SLIDER_PRESET) {
+				continue;
+			}
 			const auto sex = a_sex == RE::SEX::kNone ? a_config->GetSex(preset) : a_sex;
 			if (sex == RE::SEX::kNone) {
-				const auto name = preset->first_attribute("name");
-				logger::warn("Skipping preset '{}' due to unknown sex", name ? name->value() : "unknown");
+				logger::warn("Skipping preset '{}' due to unknown sex", nameStr);
 				continue;
 			}
 			profiles.emplace_back(std::make_shared<SliderProfile>(preset, sex, isPrivate, a_interface));
