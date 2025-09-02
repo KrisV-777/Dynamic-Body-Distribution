@@ -168,7 +168,7 @@ SkipCaching:
 				if (!folder.is_directory())
 					continue;
 				try {
-					auto profile = std::make_unique<TextureProfile>(folder);
+					auto profile = std::make_shared<TextureProfile>(folder);
 					auto name = std::string{ profile->GetName() };
 					profileMap[ProfileType::Textures][name] = std::move(profile);
 					logger::info("Added Texture Set: {}", name);
@@ -202,10 +202,12 @@ SkipCaching:
 					continue;
 				}
 				try {
-					auto profile = std::make_unique<SliderProfile>(file.path().string(), (type == "male"s), morphInterface);
-					auto name = std::string{ profile->GetName() };
-					profileMap[ProfileType::Sliders][name] = std::move(profile);
-					logger::info("Added Slider Set: {}", name);
+					const auto sliderProfiles = SliderProfile::LoadProfiles(file.path(), (type == "male"s), morphInterface);
+					for (const auto& profile : sliderProfiles) {
+						auto name = std::string{ profile->GetName() };
+						profileMap[ProfileType::Sliders][name] = profile;
+						logger::info("Added Slider Set: {}", name);
+					}
 				} catch (const std::exception& e) {
 					logger::error("Failed to add Slider Set: {}. Error: {}", fileName, e.what());
 				}
@@ -403,6 +405,7 @@ SkipCaching:
 			for (const auto& val : profileNode) {
 				const auto valStr = val.as<std::string>();
 				if (valStr == "*") {
+					// TODO: Wildcard should include all public ones, but still enable usage of private profiles
 					dest.clear();
 					a_distribution->ForEachProfile([&](std::shared_ptr<const ProfileBase> profil) {
 						dest.push_back(profil);
