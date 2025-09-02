@@ -38,13 +38,13 @@ namespace DBD
 			throw std::runtime_error(msg);
 		}
 		for (auto* preset = root->first_node("Preset"); preset; preset = preset->next_sibling("Preset")) {
-			const auto nameAttr = preset->first_attribute("name");
-			const auto nameStr = nameAttr ? nameAttr->value() : "unknown";
-			if (Util::CastLower(nameStr) == ZERO_SLIDER_PRESET) {
+			if (a_config->IsExcluded(preset)) {
 				continue;
 			}
 			const auto sex = a_sex == RE::SEX::kNone ? a_config->GetSex(preset) : a_sex;
 			if (sex == RE::SEX::kNone) {
+				const auto nameAttr = preset->first_attribute("name");
+				const auto nameStr = nameAttr ? nameAttr->value() : "unknown";
 				logger::warn("Skipping slider preset due to unknown sex: {}; File: {}", nameStr, a_xmlfilePath.string());
 				continue;
 			}
@@ -128,15 +128,28 @@ namespace DBD
 				continue;
 			try {
 				const auto root = YAML::LoadFile(file.path().string());
-				for (auto&& node : root) {
-					const auto nameStr = Util::CastLower(node.first.as<std::string>());
-					const auto sexStr = Util::CastLower(node.second.as<std::string>());
-					sexMapping[nameStr] = sexStr.starts_with("f") ? RE::SEX::kFemale : RE::SEX::kMale;
-				}
+				if (const auto assignments = root["Assignments"])
+					for (auto&& node : root["Assignments"]) {
+						const auto nameStr = Util::CastLower(node.first.as<std::string>());
+						const auto sexStr = Util::CastLower(node.second.as<std::string>());
+						sexMapping[nameStr] = sexStr.starts_with("f") ? RE::SEX::kFemale : RE::SEX::kMale;
+					}
+				if (const auto exclusions = root["Excluded"])
+					for (auto&& node : exclusions) {
+						const auto nameStr = Util::CastLower(node.as<std::string>());
+						excludedPresets.push_back(nameStr);
+					}
 			} catch (const std::exception& e) {
 				logger::error("Failed to load slider config '{}': {}", file.path().filename().string(), e.what());
 			}
 		}
+	}
+
+	bool SliderConfig::IsExcluded(const rapidxml::xml_node<char>* a_node) const
+	{
+		const auto nameAttr = a_node->first_attribute("name");
+		const auto nameStr = nameAttr ? nameAttr->value() : "unknown";
+		return std::ranges::contains(excludedPresets, Util::CastLower(nameStr));
 	}
 
 	RE::SEX SliderConfig::GetSex(const rapidxml::xml_node<char>* a_node) const

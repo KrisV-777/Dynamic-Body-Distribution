@@ -1,6 +1,10 @@
-HIMBO: "m"
-CBBE: "f"
-3BBB: "f"
-BHUNP: "f"
-UNP: "f"
-UUNP: "f"
+Assignments:
+  HIMBO: "m"
+  CBBE: "f"
+  3BBB: "f"
+  BHUNP: "f"
+  UNP: "f"
+  UUNP: "f"
+Excluded:
+  - "- Zeroed Sliders -"
+  - "HIMBO Zero for OBody"

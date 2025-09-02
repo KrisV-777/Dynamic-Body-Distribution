@@ -15,9 +15,11 @@ namespace DBD
 		SliderConfig();
 		~SliderConfig() = default;
 
+		bool IsExcluded(const rapidxml::xml_node<char>* a_node) const;
 		RE::SEX GetSex(const rapidxml::xml_node<char>* a_node) const;
 
 	private:
+		std::vector<std::string> excludedPresets{};
 		std::map<std::string, RE::SEX, StringComparator> sexMapping{};
 	};
 
@@ -25,7 +27,6 @@ namespace DBD
 	{
 		using SliderRange = std::pair<int32_t, int32_t>;
 
-		constexpr static const char* ZERO_SLIDER_PRESET{ "- zeroed sliders -" };
 		constexpr static const char* MORPH_KEY = "DBD_Morph";
 
 	public:
