@@ -187,32 +187,40 @@ SkipCaching:
 			logger::critical("Missing morph interface. Skipping slider profile initialization");
 			return;
 		}
-		for (auto& type : std::vector{ "male", "female" }) {
-			const auto rootFolder = std::format("{}/{}", SLIDER_ROOT_PATH, type);
-			if (!fs::exists(rootFolder)) {
-				logger::critical("Path to slider '{}' does not exist", type);
-				continue;
+		SliderConfig sliderConfig{};
+		const auto parseDirectory = [&](auto& directory, auto sex) {
+			if (!fs::exists(directory)) {
+				logger::warn("Directory does not exist: {}", directory);
+				return;
 			}
-			for (auto& file : fs::directory_iterator{ rootFolder }) {
-				if (!file.is_regular_file())
+			for (auto& file : fs::recursive_directory_iterator{ directory }) {
+				if (!file.is_regular_file()) {
 					continue;
-				const auto fileName = file.path().filename().string();
-				if (!fileName.ends_with(".xml")) {
-					logger::warn("Skipping non-XML file: {}", fileName);
+				} else if (file.path().extension() != ".xml") {
+					logger::warn("Skipping non-XML file: {}", file.path().string());
 					continue;
 				}
 				try {
-					const auto sliderProfiles = SliderProfile::LoadProfiles(file.path(), (type == "male"s), morphInterface);
+					const auto sliderProfiles = SliderProfile::LoadProfiles(file.path(), sex, morphInterface, &sliderConfig);
 					for (const auto& profile : sliderProfiles) {
 						auto name = std::string{ profile->GetName() };
+						if (profileMap[ProfileType::Sliders].contains(name)) {
+							logger::warn("Slider Set already exists and will be replaced: {}", name);
+						}
 						profileMap[ProfileType::Sliders][name] = profile;
 						logger::info("Added Slider Set: {}", name);
 					}
 				} catch (const std::exception& e) {
-					logger::error("Failed to add Slider Set: {}. Error: {}", fileName, e.what());
+					logger::error("Failed to add Slider Set: {}. Error: {}", file.path().string(), e.what());
 				}
 			}
-			logger::info("Loaded {} Slider Sets ({})", profileMap[ProfileType::Sliders].size(), type);
+		};
+		parseDirectory(SLIDER_DEFAULT_PATH, RE::SEX::kNone);
+		for (auto& type : std::vector{ "male", "female" }) {
+			const auto rootFolder = std::format("{}/{}", SLIDER_ROOT_PATH, type);
+			const auto sex = (type == "male"s) ? RE::SEX::kMale : RE::SEX::kFemale;
+			parseDirectory(rootFolder, sex);
+			logger::info("Loaded {} Slider Sets for {}", profileMap[ProfileType::Sliders].size(), type);
 		}
 	}
 

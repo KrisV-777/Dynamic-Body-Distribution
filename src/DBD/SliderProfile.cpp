@@ -1,8 +1,16 @@
 #include "SliderProfile.h"
 
+#include <yaml-cpp/yaml.h>
+
+#include "Util/StringUtil.h"
+
 namespace DBD
 {
-	std::vector<std::shared_ptr<SliderProfile>> SliderProfile::LoadProfiles(const std::filesystem::path& a_xmlfilePath, bool a_isMale, SKEE::IBodyMorphInterface* a_interface)
+	std::vector<std::shared_ptr<SliderProfile>> SliderProfile::LoadProfiles(
+		const std::filesystem::path& a_xmlfilePath,
+		RE::SEX a_sex,
+		SKEE::IBodyMorphInterface* a_interface,
+		SliderConfig* a_config)
 	{
 		std::vector<std::shared_ptr<SliderProfile>> profiles{};
 		if (a_xmlfilePath.empty() || a_xmlfilePath.extension() != ".xml") {
@@ -12,6 +20,7 @@ namespace DBD
 		} else if (!a_interface) {
 			throw std::runtime_error("Missing transform interface");
 		}
+		assert(a_sex != RE::SEX::kNone || a_config);
 		const bool isPrivate = a_xmlfilePath.c_str()[0] == '.';
 		std::ifstream file(a_xmlfilePath);
 		if (!file) {
@@ -29,7 +38,13 @@ namespace DBD
 			throw std::runtime_error(msg);
 		}
 		for (auto* preset = root->first_node("Preset"); preset; preset = preset->next_sibling("Preset")) {
-			profiles.emplace_back(std::make_shared<SliderProfile>(preset, a_isMale, isPrivate, a_interface));
+			const auto sex = a_sex == RE::SEX::kNone ? a_config->GetSex(preset) : a_sex;
+			if (sex == RE::SEX::kNone) {
+				const auto name = preset->first_attribute("name");
+				logger::warn("Skipping preset '{}' due to unknown sex", name ? name->value() : "unknown");
+				continue;
+			}
+			profiles.emplace_back(std::make_shared<SliderProfile>(preset, sex, isPrivate, a_interface));
 		}
 		if (!profiles.empty()) {
 			// Copy the first profile with the name of the .xml file into library, to allow referencing it by filename in configs
@@ -41,13 +56,13 @@ namespace DBD
 		return profiles;
 	}
 
-	SliderProfile::SliderProfile(const rapidxml::xml_node<char>* a_node, bool a_isMale, bool a_isPrivate, SKEE::IBodyMorphInterface* a_interface) :
+	SliderProfile::SliderProfile(const rapidxml::xml_node<char>* a_node, RE::SEX a_sex, bool a_isPrivate, SKEE::IBodyMorphInterface* a_interface) :
 		ProfileBase([&]() -> const char* {
 			if (auto* attr = a_node->first_attribute("name"))
 				return attr->value();
 			throw std::runtime_error("Missing 'name' attribute in SliderProfile node");
 		}()),
-		isMale(a_isMale), transformInterface(a_interface)
+		sex(a_sex), transformInterface(a_interface)
 	{
 		this->isPrivate = a_isPrivate;
 		for (auto* slider = a_node ? a_node->first_node("SetSlider") : nullptr; slider; slider = slider->next_sibling("SetSlider")) {
@@ -88,7 +103,7 @@ namespace DBD
 			return false;
 		}
 		const auto base = a_target->GetActorBase();
-		return base && base->GetSex() == (isMale ? RE::SEX::kMale : RE::SEX::kFemale);
+		return base && base->GetSex() == sex;
 	}
 
 	void SliderProfile::DeleteMorphs(RE::Actor* a_target, SKEE::IBodyMorphInterface* a_interface)
@@ -96,6 +111,43 @@ namespace DBD
 		a_interface->ClearBodyMorphKeys(a_target, MORPH_KEY);
 		a_interface->ApplyBodyMorphs(a_target, false);
 		a_interface->UpdateModelWeight(a_target, true);
+	}
+
+	SliderConfig::SliderConfig()
+	{
+		if (!fs::exists(CONFIG_PATH)) {
+			logger::error("Slider config path does not exist");
+			return;
+		}
+		for (auto& file : fs::recursive_directory_iterator{ CONFIG_PATH }) {
+			if (file.path().extension() != ".yml" && file.path().extension() != ".yaml")
+				continue;
+			try {
+				const auto root = YAML::LoadFile(file.path().string());
+				for (auto&& node : root) {
+					const auto nameStr = Util::CastLower(node.first.as<std::string>());
+					const auto sexStr = Util::CastLower(node.second.as<std::string>());
+					sexMapping[nameStr] = sexStr.starts_with("f") ? RE::SEX::kFemale : RE::SEX::kMale;
+				}
+			} catch (const std::exception& e) {
+				logger::error("Failed to load slider config '{}': {}", file.path().filename().string(), e.what());
+			}
+		}
+	}
+
+	RE::SEX SliderConfig::GetSex(const rapidxml::xml_node<char>* a_node) const
+	{
+		for (auto* group = a_node ? a_node->first_node("Group") : nullptr; group; group = group->next_sibling("Group")) {
+			const auto* nameAttr = group->first_attribute("name");
+			if (!nameAttr) {
+				continue;
+			}
+			const auto nameStr = Util::CastLower(nameAttr->value());
+			if (const auto it = sexMapping.find(nameStr); it != sexMapping.end()) {
+				return it->second;
+			}
+		}
+		return RE::SEX::kNone;
 	}
 
 }  // namespace DBD

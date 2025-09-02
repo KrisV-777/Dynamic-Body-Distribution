@@ -17,6 +17,7 @@ namespace DBD
 	{
 		static constexpr const char* TEXTURE_ROOT_PATH{ "Data\\Textures\\DBD" };
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
+		static constexpr const char* SLIDER_DEFAULT_PATH{ "CalienteTools\\BodySlide\\SliderPresets" };
 		static constexpr const char* CONFIGURATION_ROOT_PATH{ "Data\\SKSE\\DBD\\Configurations" };
 
 		struct Configuration
