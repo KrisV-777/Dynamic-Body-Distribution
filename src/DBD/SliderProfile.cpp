@@ -45,7 +45,7 @@ namespace DBD
 			}
 			const auto sex = a_sex == RE::SEX::kNone ? a_config->GetSex(preset) : a_sex;
 			if (sex == RE::SEX::kNone) {
-				logger::warn("Skipping preset '{}' due to unknown sex", nameStr);
+				logger::warn("Skipping slider preset due to unknown sex: {}; File: {}", nameStr, a_xmlfilePath.string());
 				continue;
 			}
 			profiles.emplace_back(std::make_shared<SliderProfile>(preset, sex, isPrivate, a_interface));
