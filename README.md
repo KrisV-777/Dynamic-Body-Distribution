@@ -1,6 +1,8 @@
-# Dynamic Body Distribution
+# Dynamic Body Distribution ([Nexus Mods Mirror](https://www.nexusmods.com/skyrimspecialedition/mods/157779))
 
 SKSE plugin that allows for runtime replacement of body textures and morphs.
+
+The entire plugin operates on `.yml` config files to apply replacements at runtime as actors load. How to write these configs and setup the necessary folders can be read up on in the [wiki](https://github.com/KrisV-777/Dynamic-Body-Distribution/wiki).
 
 ## Requirements
 * [xmake](https://xmake.io/#/)
