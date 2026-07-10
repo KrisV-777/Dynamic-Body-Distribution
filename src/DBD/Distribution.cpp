@@ -54,6 +54,9 @@ SkipCaching:
 		Priority priority{ Priority::None };
 		for (const auto& config : configurations) {
 			const auto tmpPriority = config.GetMatchPriority(a_target);
+			if (tmpPriority == Priority::None) {
+				continue;
+			}
 			if (tmpPriority < priority) {
 				validConfigs = { &config };
 				priority = tmpPriority;
