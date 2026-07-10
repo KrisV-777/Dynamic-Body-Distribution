@@ -7,6 +7,26 @@
 
 namespace DBD
 {
+	namespace
+	{
+		void ApplyProfile(RE::Actor* a_actor)
+		{
+			if (!a_actor || !a_actor->Is3DLoaded()) {
+				return;
+			}
+
+			logger::info("Resetting 3D for Actor: {}", a_actor->formID);
+			const auto dist = DBD::Distribution::GetSingleton();
+			const auto profiles = dist->SelectProfiles(a_actor);
+
+			for (auto&& profile : profiles) {
+				if (profile) {
+					profile->Apply(a_actor);
+				}
+			}
+		}
+	}
+
 	void Hooks::Install()
 	{
 		REL::Relocation<std::uintptr_t> char_vt{ RE::Character::VTABLE[0] };
@@ -29,10 +49,8 @@ namespace DBD
 			// Im aware how ugly this is, but I couldn't find a hook in which this can be done 'cleanly'
 			std::this_thread::sleep_for(2s);
 			SKSE::GetTaskInterface()->AddTask([id]() {
-				const auto actor = RE::TESForm::LookupByID<RE::Actor>(id);
-				if (actor && actor->Is3DLoaded()) {
-					actor->DoReset3D(true);
-				}
+				auto actor = RE::TESForm::LookupByID<RE::Actor>(id);
+				ApplyProfile(actor);
 			});
 		}).detach();
 		return _Load3D(a_this, a_arg1);
@@ -42,15 +60,7 @@ namespace DBD
 	{
 		_DoReset3D(a_this, a_updateWeight);
 
-		logger::info("Resetting 3D for Actor: {}", a_this.formID);
-		const auto dist = DBD::Distribution::GetSingleton();
-		const auto profiles = dist->SelectProfiles(&a_this);
-
-		for (auto&& profile : profiles) {
-			if (profile) {
-				profile->Apply(&a_this);
-			}
-		}
+		ApplyProfile(&a_this);
 	}
 
 }  // namespace DBD
