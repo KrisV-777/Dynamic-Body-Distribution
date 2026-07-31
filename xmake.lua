@@ -7,7 +7,7 @@ PROJECT_NAME = "DynamicBodyDistribution"
 set_project(PROJECT_NAME)
 set_version("0.5.1")
 set_languages("cxx23")
-set_license("apache-2.0")
+set_license("gpl-3.0")
 set_warnings("allextra", "error")
 
 -- Options
