@@ -1,7 +1,7 @@
 #include "Distribution.h"
 
-#include "Util/FormLookup.h"
-#include "Util/Random.h"
+#include "shared/KrisV/Util/FormLookup.h"
+#include "shared/KrisV/Random.h"
 
 namespace DBD
 {

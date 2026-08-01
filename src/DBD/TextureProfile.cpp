@@ -1,6 +1,6 @@
 #include "TextureProfile.h"
 
-#include "Util/StringUtil.h"
+#include "shared/KrisV/Util/String.h"
 
 namespace DBD
 {

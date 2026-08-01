@@ -3,7 +3,7 @@
 #include <detours.h>
 
 #include "DBD/Distribution.h"
-#include "Util/StringUtil.h"
+#include "shared/KrisV/Util/String.h"
 
 namespace DBD
 {

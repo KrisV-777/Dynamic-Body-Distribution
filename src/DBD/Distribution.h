@@ -3,11 +3,11 @@
 #include <yaml-cpp/yaml.h>
 
 #include "API/SKEE.h"
-#include "Conditions/Conditional.h"
 #include "DBD/SliderProfile.h"
 #include "DBD/TextureProfile.h"
 #include "ProfileBase.h"
-#include "Util/Singleton.h"
+#include "shared/KrisV/Conditions/Conditional.h"
+#include "shared/KrisV/Singleton.h"
 
 namespace DBD
 {
