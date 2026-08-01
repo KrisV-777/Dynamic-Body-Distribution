@@ -118,8 +118,7 @@ namespace DBD
 	{
 		using VisitControl = RE::BSVisit::BSVisitControl;
 		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) {
-			auto effect = a_geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::State::kEffect].get();
-			auto lightingShader = effect ? netimmerse_cast<RE::BSLightingShaderProperty*>(effect) : nullptr;
+			auto lightingShader = a_geometry->lightingShaderProp_cast();
 			if (!lightingShader) {
 				return VisitControl::kContinue;
 			}
