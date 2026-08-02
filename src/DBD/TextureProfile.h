@@ -22,9 +22,13 @@ namespace DBD
 		TextureProfile(const fs::directory_entry& a_textureFolder);
 		~TextureProfile() = default;
 
+		virtual bool IsTextureProfile() const override { return true; }
+		
+
 		void Apply(RE::Actor* a_target) const override;
 		bool IsApplicable(RE::Actor* a_target) const override;
 		void OverrideObjectTextures(RE::NiAVObject* a_object) const;
+		void OverrideObjectTexturesImpl(RE::BSGeometry* a_geometry) const;
 
 	private:
 		RE::BSTextureSet* CreateOverwriteTextureSet(RE::BSTextureSet* a_sourceSet) const;

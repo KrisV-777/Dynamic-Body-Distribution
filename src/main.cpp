@@ -8,11 +8,21 @@ inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 	switch (message->type) {
 	case SKSE::MessagingInterface::kSaveGame:
 		break;
+	case SKSE::MessagingInterface::kPostPostLoad:
+		DBD::Hooks::Install();
+		break;
 	case SKSE::MessagingInterface::kDataLoaded:
 		DBD::Distribution::GetSingleton()->Initialize();
 		break;
 	case SKSE::MessagingInterface::kNewGame:
 	case SKSE::MessagingInterface::kPostLoadGame:
+		std::thread([&]() {
+			// Player being the pdf that it is doesnt fall in line with other NPCs
+			// Something resets the body after my initialization does its final pass
+			// Dunno what it is, or how I detect that its done, so I blindly wait a bit and then reapply the profile
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			DBD::ApplyProfile(RE::PlayerCharacter::GetSingleton());
+		}).detach();
 		break;
 	}
 }
@@ -56,8 +66,6 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 	}
 
 	SKSE::Init(a_skse);
-
-	DBD::Hooks::Install();
 
 	const auto msging = SKSE::GetMessagingInterface();
 	if (!msging->RegisterListener("SKSE", SKSEMessageHandler)) {

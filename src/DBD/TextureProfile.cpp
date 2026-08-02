@@ -118,127 +118,134 @@ namespace DBD
 	{
 		using VisitControl = RE::BSVisit::BSVisitControl;
 		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) {
-			auto lightingShader = a_geometry->lightingShaderProp_cast();
-			if (!lightingShader) {
-				return VisitControl::kContinue;
-			}
-			const auto material = static_cast<MaterialBase*>(lightingShader->material);
-			if (material->materialAlpha < 1.f / 255.f) {
-				return VisitControl::kContinue;
-			}
-			const auto feature = material->GetFeature();
-			constexpr std::array supportedFeatures{
-				Feature::kDefault,
-				Feature::kEnvironmentMap,
-				Feature::kEye,
-				Feature::kFaceGen,
-				Feature::kFaceGenRGBTint,
-				Feature::kGlowMap,
-				Feature::kHairTint,
-				// No clue if Skyrim even supports that for armor/body meshes, but meh...
-				Feature::kMultilayerParallax,
-				Feature::kParallax
-			};
-			if (!std::ranges::contains(supportedFeatures, feature)) {
-				logger::error("Unsupported material feature: {}", magic_enum::enum_name(feature));
-				return VisitControl::kContinue;
-			}
-			const auto newMaterial = static_cast<MaterialBase*>(material->Create());
-			if (!newMaterial) {
-				return VisitControl::kContinue;
-			}
-			newMaterial->CopyMembers(material);
-			newMaterial->ClearTextures();
-
-			const auto materialTexture = material->GetTextureSet();
-			const auto materialTextureNew = CreateOverwriteTextureSet(materialTexture.get());
-			if (!materialTextureNew) {
-				return VisitControl::kContinue;
-			}
-			newMaterial->OnLoadTextureSet(0, materialTextureNew);
-			switch (feature) {
-			case Feature::kEnvironmentMap:
-				{
-					const auto oldEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(material);
-					const auto newEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(newMaterial);
-					if (!newEnvMap->envTexture)
-						newEnvMap->envTexture = oldEnvMap->envTexture;
-					if (!newEnvMap->envMaskTexture) {
-						newEnvMap->envMaskTexture = oldEnvMap->envMaskTexture;
-					}
-				}
-				break;
-			case Feature::kEye:
-				{
-					const auto oldEye = static_cast<RE::BSLightingShaderMaterialEye*>(material);
-					const auto newEye = static_cast<RE::BSLightingShaderMaterialEye*>(newMaterial);
-					if (!newEye->envTexture)
-						newEye->envTexture = oldEye->envTexture;
-					if (!newEye->envMaskTexture) {
-						newEye->envMaskTexture = oldEye->envMaskTexture;
-					}
-				}
-				break;
-			case Feature::kFaceGen:
-				{
-					const auto oldFacegen = static_cast<MaterialFacegen*>(material);
-					const auto newFacegen = static_cast<MaterialFacegen*>(newMaterial);
-					newFacegen->tintTexture = oldFacegen->tintTexture;
-					newFacegen->detailTexture = oldFacegen->detailTexture;
-				}
-				break;
-			case Feature::kFaceGenRGBTint:
-				{
-					const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(material);
-					const auto newFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(newMaterial);
-					newFacegen->tintColor = oldFacegen->tintColor;
-				}
-				break;
-			case Feature::kGlowMap:
-				{
-					const auto oldEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(material);
-					const auto newEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(newMaterial);
-					if (!newEye->glowTexture)
-						newEye->glowTexture = oldEye->glowTexture;
-				}
-				break;
-			case Feature::kHairTint:
-				{
-					const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(material);
-					const auto newFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(newMaterial);
-					newFacegen->tintColor = oldFacegen->tintColor;
-				}
-				break;
-			case Feature::kMultilayerParallax:
-				{
-					const auto oldParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(material);
-					const auto newParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(newMaterial);
-					if (!newParallax->layerTexture)
-						newParallax->layerTexture = oldParallax->layerTexture;
-					if (!newParallax->envTexture)
-						newParallax->envTexture = oldParallax->envTexture;
-					if (!newParallax->envMaskTexture)
-						newParallax->envMaskTexture = oldParallax->envMaskTexture;
-				}
-				break;
-			case Feature::kParallax:
-				{
-					const auto oldParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(material);
-					const auto newParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(newMaterial);
-					if (!newParallax->heightTexture)
-						newParallax->heightTexture = oldParallax->heightTexture;
-				}
-				break;
-			}
-			lightingShader->SetMaterial(newMaterial, true);
-			lightingShader->SetupGeometry(a_geometry);
-			lightingShader->FinishSetupGeometry(a_geometry);
-
-			newMaterial->~BSLightingShaderMaterialBase();
-			RE::free(newMaterial);
-
+			OverrideObjectTexturesImpl(a_geometry);
 			return VisitControl::kContinue;
 		});
+	}
+
+	void TextureProfile::OverrideObjectTexturesImpl(RE::BSGeometry* a_geometry) const
+	{
+		const auto lightingShader = a_geometry->lightingShaderProp_cast();
+		if (!lightingShader) {
+			return;
+		}
+		const auto material = static_cast<MaterialBase*>(lightingShader->material);
+		if (material->materialAlpha < 1.f / 255.f) {
+			return;
+		}
+		const auto feature = material->GetFeature();
+		constexpr std::array supportedFeatures{
+			Feature::kDefault,
+			Feature::kEnvironmentMap,
+			Feature::kEye,
+			Feature::kFaceGen,
+			Feature::kFaceGenRGBTint,
+			Feature::kGlowMap,
+			Feature::kHairTint,
+			// No clue if Skyrim even supports that for armor/body meshes, but meh...
+			Feature::kMultilayerParallax,
+			Feature::kParallax
+		};
+		if (!std::ranges::contains(supportedFeatures, feature)) {
+			const auto featureName = magic_enum::enum_name(feature);
+			logger::error("Unsupported material feature: {}", featureName);
+			return;
+		}
+		const auto newMaterial = static_cast<MaterialBase*>(material->Create());
+		if (!newMaterial) {
+			return;
+		}
+		newMaterial->CopyMembers(material);
+		newMaterial->ClearTextures();
+
+		const auto materialTexture = material->GetTextureSet();
+		const auto materialTextureNew = CreateOverwriteTextureSet(materialTexture.get());
+		if (!materialTextureNew) {
+			return;
+		}
+		newMaterial->OnLoadTextureSet(0, materialTextureNew);
+		switch (feature) {
+		case Feature::kEnvironmentMap:
+			{
+				const auto oldEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(material);
+				const auto newEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(newMaterial);
+				if (!newEnvMap->envTexture)
+					newEnvMap->envTexture = oldEnvMap->envTexture;
+				if (!newEnvMap->envMaskTexture) {
+					newEnvMap->envMaskTexture = oldEnvMap->envMaskTexture;
+				}
+			}
+			break;
+		case Feature::kEye:
+			{
+				const auto oldEye = static_cast<RE::BSLightingShaderMaterialEye*>(material);
+				const auto newEye = static_cast<RE::BSLightingShaderMaterialEye*>(newMaterial);
+				if (!newEye->envTexture)
+					newEye->envTexture = oldEye->envTexture;
+				if (!newEye->envMaskTexture) {
+					newEye->envMaskTexture = oldEye->envMaskTexture;
+				}
+			}
+			break;
+		case Feature::kFaceGen:
+			{
+				const auto oldFacegen = static_cast<MaterialFacegen*>(material);
+				const auto newFacegen = static_cast<MaterialFacegen*>(newMaterial);
+				newFacegen->tintTexture = oldFacegen->tintTexture;
+				newFacegen->detailTexture = oldFacegen->detailTexture;
+			}
+			break;
+		case Feature::kFaceGenRGBTint:
+			{
+				const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(material);
+				const auto newFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(newMaterial);
+				newFacegen->tintColor = oldFacegen->tintColor;
+			}
+			break;
+		case Feature::kGlowMap:
+			{
+				const auto oldEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(material);
+				const auto newEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(newMaterial);
+				if (!newEye->glowTexture)
+					newEye->glowTexture = oldEye->glowTexture;
+			}
+			break;
+		case Feature::kHairTint:
+			{
+				const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(material);
+				const auto newFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(newMaterial);
+				newFacegen->tintColor = oldFacegen->tintColor;
+			}
+			break;
+		case Feature::kMultilayerParallax:
+			{
+				const auto oldParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(material);
+				const auto newParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(newMaterial);
+				if (!newParallax->layerTexture)
+					newParallax->layerTexture = oldParallax->layerTexture;
+				if (!newParallax->envTexture)
+					newParallax->envTexture = oldParallax->envTexture;
+				if (!newParallax->envMaskTexture)
+					newParallax->envMaskTexture = oldParallax->envMaskTexture;
+			}
+			break;
+		case Feature::kParallax:
+			{
+				const auto oldParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(material);
+				const auto newParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(newMaterial);
+				if (!newParallax->heightTexture)
+					newParallax->heightTexture = oldParallax->heightTexture;
+			}
+			break;
+		}
+		lightingShader->SetMaterial(newMaterial, true);
+		lightingShader->SetupGeometry(a_geometry);
+		lightingShader->FinishSetupGeometry(a_geometry);
+
+		newMaterial->~BSLightingShaderMaterialBase();
+		RE::free(newMaterial);
+
+		return;
 	}
 
 }  // namespace DBD

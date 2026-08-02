@@ -8,13 +8,7 @@ namespace DBD
 	void Distribution::Initialize()
 	{
 		if (const auto intfc = SKEE::GetInterfaceMap()) {
-			actorUpdateManager = SKEE::GetActorUpdateManager(intfc);
 			morphInterface = SKEE::GetBodyMorphInterface(intfc);
-			if (actorUpdateManager) {
-				actorUpdateManager->AddInterface(this);
-			} else {
-				logger::error("Failed to get ActorUpdateManager. Some textures will not be updated");
-			}
 		} else {
 			logger::error("Failed to get SKEE interface map");
 		}
@@ -333,31 +327,6 @@ SkipCaching:
 	void Distribution::Revert(SKSE::SerializationInterface*)
 	{
 		cache.clear();
-	}
-
-	void Distribution::OnAttach(
-		[[maybe_unused]] RE::TESObjectREFR* refr,
-		[[maybe_unused]] RE::TESObjectARMO* armor,
-		[[maybe_unused]] RE::TESObjectARMA* addon,
-		[[maybe_unused]] RE::NiAVObject* object,
-		[[maybe_unused]] bool isFirstPerson,
-		[[maybe_unused]] RE::NiNode* skeleton,
-		[[maybe_unused]] RE::NiNode* root)
-	{
-		if (!refr || !armor || !addon || !object) {
-			return;
-		}
-		const auto cacheEntry = cache.find(refr->GetFormID());
-		if (cacheEntry == cache.end()) {
-			return;
-		}
-		const auto& profiles = cacheEntry->second;
-		const auto& profilePtr = profiles[ProfileType::Textures];
-		if (!profilePtr) {
-			return;
-		}
-		const auto& textureProfile = static_cast<const TextureProfile*>(profilePtr.get());
-		textureProfile->OverrideObjectTextures(object);
 	}
 
 	Distribution::Configuration::Configuration(const YAML::Node& a_node, const Distribution* a_distribution)

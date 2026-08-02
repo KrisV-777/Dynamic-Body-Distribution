@@ -32,6 +32,7 @@ namespace DBD
 
 		virtual void Apply(RE::Actor* a_target) const = 0;
 		virtual bool IsApplicable(RE::Actor* a_target) const = 0;
+		virtual bool IsTextureProfile() const = 0;
 
 	protected:
 		RE::BSFixedString name;

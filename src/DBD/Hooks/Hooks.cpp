@@ -7,60 +7,57 @@
 
 namespace DBD
 {
-	namespace
-	{
-		void ApplyProfile(RE::Actor* a_actor)
-		{
-			if (!a_actor || !a_actor->Is3DLoaded()) {
-				return;
-			}
-
-			logger::info("Resetting 3D for Actor: {}", a_actor->formID);
-			const auto dist = DBD::Distribution::GetSingleton();
-			const auto profiles = dist->SelectProfiles(a_actor);
-
-			for (auto&& profile : profiles) {
-				if (profile) {
-					profile->Apply(a_actor);
-				}
-			}
-		}
-	}
-
 	void Hooks::Install()
 	{
-		REL::Relocation<std::uintptr_t> char_vt{ RE::Character::VTABLE[0] };
-		_Load3D = char_vt.write_vfunc(0x6A, Load3D);
+		logger::info("Installing Hooks");
 
-		REL::Relocation<std::uintptr_t> target{ RELOCATION_ID(39181, 40255) };
+		// const auto eventSource = RE::ScriptEventSourceHolder::GetSingleton();
+		// eventSource->AddEventSink<RE::TESLoadGameEvent>(&_playerLoadGame);
+
+		REL::Relocation<std::uintptr_t> target{ REL::VariantID(15535, 15712, 0x01DB9E0) };
 		const uintptr_t addr = target.address();
-		_DoReset3D = (DoReset3DType)addr;
+		_UpdateBipedAnim = (decltype(_UpdateBipedAnim))addr;
 		DetourTransactionBegin();
 		DetourUpdateThread(GetCurrentThread());
-		DetourAttach(&(PVOID&)_DoReset3D, (PBYTE)&DoReset3D);
+		DetourAttach(&(PVOID&)_UpdateBipedAnim, (PBYTE)&UpdateBipedAnim);
 		if (DetourTransactionCommit() != NO_ERROR) {
-			logger::error("Failed to install hook on DoReset3D");
+			logger::error("Failed to install hook on UpdateBipedAnim");
 		}
+
+		REL::Relocation<std::uintptr_t> bsfacegenninode_vt{ RE::BSFaceGenNiNode::VTABLE[0] };
+		_FixSkinInstances = bsfacegenninode_vt.write_vfunc(REL::Module::IsVR() ? 0x3F : 0x3E, FixSkinInstances);
+
+		logger::debug("Hooks installed");
 	}
 
-	RE::NiAVObject* Hooks::Load3D(RE::Character& a_this, bool a_arg1)
+	void Hooks::FixSkinInstances(RE::BSFaceGenNiNode& a_this, RE::NiNode* a_skeleton, bool a_arg2)
 	{
-		std::thread([id = a_this.formID]() {
-			// Im aware how ugly this is, but I couldn't find a hook in which this can be done 'cleanly'
-			std::this_thread::sleep_for(2s);
-			SKSE::GetTaskInterface()->AddTask([id]() {
-				auto actor = RE::TESForm::LookupByID<RE::Actor>(id);
-				ApplyProfile(actor);
-			});
-		}).detach();
-		return _Load3D(a_this, a_arg1);
+		_FixSkinInstances(a_this, a_skeleton, a_arg2);
+
+		if (!a_skeleton) {
+			return;
+		}
+		const auto userRef = a_this.GetUserData();
+		if (!userRef || !userRef->Is(RE::FormType::ActorCharacter)) {
+			return;
+		}
+		const auto userAct = userRef->As<RE::Actor>();
+		assert(userAct);
+
+		ApplyProfile(userAct, a_skeleton);
 	}
 
-	void Hooks::DoReset3D(RE::Actor& a_this, bool a_updateWeight)
+	RE::NiAVObject* Hooks::UpdateBipedAnim(RE::BipedAnim& a_this, RE::NiNode* a_skeleton, RE::BSFadeNode* a3, RE::BIPED_OBJECT a_biped, uint64_t a5, uint64_t a6, uint64_t a7)
 	{
-		_DoReset3D(a_this, a_updateWeight);
+		const auto ret = _UpdateBipedAnim(a_this, a_skeleton, a3, a_biped, a5, a6, a7);
 
-		ApplyProfile(&a_this);
+		const auto actorHandle = a_this.actorRef.get();
+		const auto actor = actorHandle ? actorHandle->As<RE::Actor>() : nullptr;
+		if (actor && ret) {
+			ApplyProfile(actor, ret);
+		}
+
+		return ret;
 	}
 
 }  // namespace DBD

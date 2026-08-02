@@ -12,8 +12,7 @@
 namespace DBD
 {
 	class Distribution :
-		public Singleton<Distribution>,
-		public SKEE::IAddonAttachmentInterface
+		public Singleton<Distribution>
 	{
 		static constexpr const char* TEXTURE_ROOT_PATH{ "Data\\Textures\\DBD" };
 		static constexpr const char* SLIDER_ROOT_PATH{ "Data\\SKSE\\DBD\\Sliders" };
@@ -71,8 +70,6 @@ namespace DBD
 		void Revert(SKSE::SerializationInterface* a_intfc);
 
 	private:
-		void OnAttach(RE::TESObjectREFR* refr, RE::TESObjectARMO* armor, RE::TESObjectARMA* addon, RE::NiAVObject* object, bool isFirstPerson, RE::NiNode* skeleton, RE::NiNode* root) override;
-
 		void LoadTextureProfiles();
 		void LoadSliderProfiles();
 		void LoadConditions();
@@ -87,5 +84,33 @@ namespace DBD
 		SKEE::IActorUpdateManager* actorUpdateManager;
 		SKEE::IBodyMorphInterface* morphInterface;
 	};
+
+	inline void ApplyProfile(RE::Actor* a_actor, RE::NiAVObject* a_part = nullptr)
+	{
+		if (!a_part) {
+			a_part = a_actor->Get3D();
+			if (!a_part) {
+				logger::warn("Actor {} has no 3D model, skipping profile application", a_actor->formID);
+				return;
+			}
+		}
+
+		logger::info("Trying to apply profile to Actor: {}", a_actor->formID);
+		const auto dist = DBD::Distribution::GetSingleton();
+		const auto profiles = dist->SelectProfiles(a_actor);
+
+
+		for (auto&& profile : profiles) {
+			if (!profile) {
+				continue;
+			}
+			if (profile->IsTextureProfile()) {
+				const auto texSet = static_cast<const TextureProfile*>(profile.get());
+				texSet->OverrideObjectTextures(a_part);
+			} else {
+				profile->Apply(a_actor);
+			}
+		}
+	}
 
 }  // namespace DBD

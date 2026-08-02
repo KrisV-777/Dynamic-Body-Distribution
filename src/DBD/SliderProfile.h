@@ -40,6 +40,7 @@ namespace DBD
 		bool IsApplicable(RE::Actor* a_target) const override;
 
 		static void DeleteMorphs(RE::Actor* a_target, SKEE::IBodyMorphInterface* a_interface);
+		virtual bool IsTextureProfile() const override { return false; }
 
 	private:
 		RE::SEX sex;
