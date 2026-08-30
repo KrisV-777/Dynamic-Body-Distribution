@@ -81,7 +81,7 @@ option_end()
 
 -- Dependencies & Includes
 -- https://github.com/xmake-io/xmake-repo/tree/dev
-add_requires("yaml-cpp", "frozen", "magic_enum", "rapidxml")
+add_requires("yaml-cpp", "frozen", "magic_enum", "rapidxml", "glaze")
 
 -- policies
 set_policy("package.requires_lock", true)
@@ -147,7 +147,7 @@ target(PROJECT_NAME)
     set_enabled(get_config("build_dll"))
 
     -- Dependencies
-    add_packages("yaml-cpp", "frozen", "magic_enum", "rapidxml")
+    add_packages("yaml-cpp", "frozen", "magic_enum", "rapidxml", "glaze")
     add_deps("detours")
     add_includedirs("lib/detours/src")
 
