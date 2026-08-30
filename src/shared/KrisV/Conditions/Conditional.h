@@ -18,6 +18,7 @@ namespace Conditions
 
       public:
         _NODISCARD bool ConditionsMet(RE::TESObjectREFR* a_subject, RE::TESObjectREFR* a_target) const;
+        _NODISCARD const RE::TESCondition* GetUnderlying() const { return _conditions.get(); }
 
         operator bool() const { return _conditions != nullptr; }
 
