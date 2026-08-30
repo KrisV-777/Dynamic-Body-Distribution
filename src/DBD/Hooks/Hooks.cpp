@@ -11,9 +11,6 @@ namespace DBD
 	{
 		logger::info("Installing Hooks");
 
-		// const auto eventSource = RE::ScriptEventSourceHolder::GetSingleton();
-		// eventSource->AddEventSink<RE::TESLoadGameEvent>(&_playerLoadGame);
-
 		REL::Relocation<std::uintptr_t> target{ REL::VariantID(15535, 15712, 0x01DB9E0) };
 		const uintptr_t addr = target.address();
 		_UpdateBipedAnim = (decltype(_UpdateBipedAnim))addr;
