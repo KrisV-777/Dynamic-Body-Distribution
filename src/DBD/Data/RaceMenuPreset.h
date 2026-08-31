@@ -7,27 +7,30 @@ namespace DBD::Data
 	class RaceMenuPreset
 	{
 	public:
-		RaceMenuPreset(std::string a_presetName, SKEE::IPresetInterface* a_presetInterface) : _presetName(a_presetName), _presetInterface(a_presetInterface) {}
+		RaceMenuPreset(fs::path a_presetJslot, SKEE::IPresetInterface* a_presetInterface) :
+			_presetName(a_presetJslot.filename().string()), _presetPath(a_presetJslot), _presetInterface(a_presetInterface) {}
 		~RaceMenuPreset() = default;
 
 		std::string_view GetName() const noexcept { return _presetName; }
 
-		void LoadPreset(RE::Actor* a_actor) const
+		void Apply(RE::Actor* a_actor) const
 		{
 			assert(_presetInterface && a_actor);
 			const auto tintTexture = _tintMask.empty() ? GetDefaultTintMask(a_actor) : _tintMask;
-			_presetInterface->LoadPreset(_presetName.c_str(), tintTexture.c_str(), a_actor);
+			_presetInterface->LoadPreset(_presetPath.string().c_str(), tintTexture.c_str(), a_actor);
 		}
 
 	private:
 		std::string GetDefaultTintMask(RE::Actor* a_actor) const
 		{
 			const auto face = a_actor->GetFaceNodeSkinned();
-			const auto faceGen = static_cast<RE::BSLightingShaderMaterialFacegen*>(
-				face->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::BSShaderType::kFaceGen));
-			return faceGen && faceGen->tintTexture ? faceGen->tintTexture->name : "";
+			const auto faceGeo = face->GetFirstGeometryOfShaderType(RE::BSShaderMaterial::Feature::kFaceGen);
+			const auto shader = faceGeo ? faceGeo->lightingShaderProp_cast() : nullptr;
+			const auto material = shader ? shader->material : nullptr;
+			return material ? static_cast<RE::BSLightingShaderMaterialFacegen*>(material)->tintTexture->name.data() : "";
 		}
 
+		fs::path _presetPath;
 		std::string _presetName;
 		std::string _tintMask;
 		SKEE::IPresetInterface* _presetInterface;

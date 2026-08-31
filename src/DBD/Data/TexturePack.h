@@ -20,14 +20,14 @@ namespace DBD::Data
 		/// @param a_actor The actor to apply the texture pack to.
 		/// @param a_object The object to apply the texture pack to.
 		/// @return True if any replacements occurred, false otherwise.
-		bool ReplaceTextures(RE::Actor* a_actor) const;
-		bool ReplaceTextures(RE::NiAVObject* a_object) const;
+		bool Apply(RE::Actor* a_actor) const;
+		bool Apply(RE::NiAVObject* a_object) const;
 
 		/// @brief Checks if the texture pack has any replacements for the given actor or object.
 		/// @param a_actor The actor to check for replacements.
 		/// @param a_object The object to check for replacements.
 		/// @return True if any replacements exist, false otherwise.
-		/// @note This behaves as a dry-run of ReplaceTextures. If application is intended, use ReplaceTextures directly.
+		/// @note This behaves as a dry-run of Apply. If application is intended, use Apply directly.
 		_NODISCARD bool HasReplacements(RE::Actor* a_actor) const;
 		_NODISCARD bool HasReplacements(RE::NiAVObject* a_object) const;
 

@@ -39,7 +39,7 @@ namespace DBD::Data
 
 		/// @brief Applies the slider preset to the specified actor.
 		/// @param a_target The actor to apply the preset to.
-		void ApplyPreset(RE::Actor* a_target) const;
+		void Apply(RE::Actor* a_target) const;
 
 		/// @return The name of the preset.
 		std::string_view GetName() const noexcept { return _name; }

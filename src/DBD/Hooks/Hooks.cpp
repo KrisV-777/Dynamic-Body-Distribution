@@ -41,7 +41,7 @@ namespace DBD
 		const auto userAct = userRef->As<RE::Actor>();
 		assert(userAct);
 
-		ApplyProfile(userAct, a_skeleton);
+		DBD::Distribution::GetSingleton()->ApplyProfiles(userAct, a_skeleton);
 	}
 
 	RE::NiAVObject* Hooks::UpdateBipedAnim(RE::BipedAnim& a_this, RE::NiNode* a_skeleton, RE::BSFadeNode* a3, RE::BIPED_OBJECT a_biped, uint64_t a5, uint64_t a6, uint64_t a7)
@@ -51,7 +51,7 @@ namespace DBD
 		const auto actorHandle = a_this.actorRef.get();
 		const auto actor = actorHandle ? actorHandle->As<RE::Actor>() : nullptr;
 		if (actor && ret) {
-			ApplyProfile(actor, ret);
+			DBD::Distribution::GetSingleton()->ApplyProfiles(actor, ret);
 		}
 
 		return ret;

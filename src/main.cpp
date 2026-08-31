@@ -21,7 +21,7 @@ inline void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 			// Something resets the body after my initialization does its final pass
 			// Dunno what it is, or how I detect that its done, so I blindly wait a bit and then reapply the profile
 			std::this_thread::sleep_for(std::chrono::seconds(1));
-			DBD::ApplyProfile(RE::PlayerCharacter::GetSingleton());
+			DBD::Distribution::GetSingleton()->ApplyProfiles(RE::PlayerCharacter::GetSingleton());
 		}).detach();
 		break;
 	}

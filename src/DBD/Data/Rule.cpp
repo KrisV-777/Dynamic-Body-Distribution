@@ -35,11 +35,12 @@ namespace DBD::Data
 		if (auto ec = glz::read_file_json(data, a_jsonFilePath.data(), std::string{})) {
 			throw std::runtime_error(
 				std::format("Failed to load Rule from {} with Error Code {}: {}",
-					a_jsonFilePath, ec.ec, ec.custom_error_message));
+					a_jsonFilePath, std::to_underlying(ec.ec), ec.custom_error_message));
 		}
 
 		_name = data.Name;
-		_conditional = Conditions::Conditional(data.Conditions, {});
+		_conditional = Conditions::Conditional(
+			data.Conditions, Conditions::RefMap(std::map<std::string, std::string>{}));
 
 		for (const auto& candidate : data.TextureCandidates) {
 			_wildcardTexturePack = _wildcardTexturePack || candidate.Name == "Any";
@@ -60,7 +61,7 @@ namespace DBD::Data
 		std::vector<std::shared_ptr<BodyslidePreset>> a_bodyslidePresets,
 		std::vector<std::shared_ptr<RaceMenuPreset>> a_raceMenuPresets) :
 		_name(std::move(a_name)),
-		_priority(std::numeric_limits<uint16_t>::max()),
+		_priority(std::numeric_limits<uint16_t>::max() - 1),
 		_conditional(std::move(a_conditional)),
 		_texturePacks(std::move(a_texturePacks)),
 		_bodyslidePresets(std::move(a_bodyslidePresets)),
@@ -71,23 +72,23 @@ namespace DBD::Data
 		}
 		for (auto item = _conditional.GetUnderlying()->head; item; item = item->next) {
 			const auto& data = item->data;
-			const auto funcId = data.functionData.function;
-			const auto priority = InferPriority(funcId);
-			_priority = std::min(_priority, priority);
+			const auto functionID = data.functionData.function.get();
+			const auto priority = MapFunctionToPriority(functionID);
+			_priority = (std::min)(_priority, priority);
 		}
 	}
 
-	std::shared_ptr<TexturePack> Rule::SelectTexturePack(RE::Actor* a_actor) const
+	std::shared_ptr<TexturePack> Rule::SelectTexturePack(RE::Actor*) const
 	{
 		return _texturePacks.empty() ? nullptr : Random::draw(_texturePacks);
 	}
 
-	std::shared_ptr<BodyslidePreset> Rule::SelectBodyslidePreset(RE::Actor* a_actor) const
+	std::shared_ptr<BodyslidePreset> Rule::SelectBodyslidePreset(RE::Actor*) const
 	{
 		return _bodyslidePresets.empty() ? nullptr : Random::draw(_bodyslidePresets);
 	}
 
-	std::shared_ptr<RaceMenuPreset> Rule::SelectRaceMenuPreset(RE::Actor* a_actor) const
+	std::shared_ptr<RaceMenuPreset> Rule::SelectRaceMenuPreset(RE::Actor*) const
 	{
 		return _raceMenuPresets.empty() ? nullptr : Random::draw(_raceMenuPresets);
 	}
@@ -97,54 +98,55 @@ namespace DBD::Data
 		return _conditional && _conditional.ConditionsMet(a_subject, a_subject);
 	}
 
-	static uint16_t Rule::MapFunctionToPriority(RE::FunctionID funcId)
+	uint16_t Rule::MapFunctionToPriority(RE::FUNCTION_DATA::FunctionID a_functionID)
 	{
-		switch (funcId) {
-		case FuncID::kGetIsReference:
+		using FunctionID = RE::FUNCTION_DATA::FunctionID;
+		switch (a_functionID) {
+		case FunctionID::kGetIsReference:
 			return 100;
-		case FuncID::kGetIsID:
+		case FunctionID::kGetIsID:
 			return 200;
-		case FuncID::kGetIsRace:
+		case FunctionID::kGetIsRace:
 			return 300;
-		case FuncID::kIsUndead:
+		case FunctionID::kIsUndead:
 			return 400;
-		case FuncID::kIsCommandedActor:
+		case FunctionID::kIsCommandedActor:
 			return 500;
-		case FuncID::kGetFactionRank:
+		case FunctionID::kGetFactionRank:
 			return 600;
-		case FuncID::kGetInFaction:
+		case FunctionID::kGetInFaction:
 			return 700;
-		case FuncID::kGetIsCrimeFaction:
+		case FunctionID::kGetIsCrimeFaction:
 			return 800;
-		case FuncID::kIsInList:
+		case FunctionID::kIsInList:
 			return 900;
-		case FuncID::kHasPerk:
+		case FunctionID::kHasPerk:
 			return 1000;
-		case FuncID::kHasKeyword:
+		case FunctionID::kHasKeyword:
 			return 1100;
-		case FuncID::kWornHasKeyword:
+		case FunctionID::kWornHasKeyword:
 			return 1200;
-		case FuncID::kGetIsVoiceType:
+		case FunctionID::kGetIsVoiceType:
 			return 1300;
-		case FuncID::kGetIsClass:
+		case FunctionID::kGetIsClass:
 			return 1400;
-		case FuncID::kGetTimeDead:
+		case FunctionID::kGetTimeDead:
 			return 1500;
-		case FuncID::kGetDead:
+		case FunctionID::kGetDead:
 			return 1600;
-		case FuncID::kGetDisease:
+		case FunctionID::kGetDisease:
 			return 1700;
-		case FuncID::kGetIsGhost:
+		case FunctionID::kGetIsGhost:
 			return 1800;
-		case FuncID::kIsGuard:
+		case FunctionID::kIsGuard:
 			return 1900;
-		case FuncID::kIsUnique:
+		case FunctionID::kIsUnique:
 			return 2000;
-		case FuncID::kIsEssential:
+		case FunctionID::kIsEssential:
 			return 2100;
-		case FuncID::kGetGlobalValue:
+		case FunctionID::kGetGlobalValue:
 			return 2200;
-		case FuncID::kGetIsEditorLocation:
+		case FunctionID::kGetIsEditorLocation:
 			return 2300;
 		default:
 			// Leave a small upward buffer for condition-less and random rules

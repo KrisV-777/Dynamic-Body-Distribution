@@ -31,7 +31,7 @@ namespace DBD::Data
 		if (auto ec = glz::read_file_json(data, a_jsonFilePath.data(), std::string{})) {
 			throw std::runtime_error(
 				std::format("Failed to load TexturePack from {} with Error Code {}: {}",
-					a_jsonFilePath, ec.ec, ec.custom_error_message));
+					a_jsonFilePath, std::to_underlying(ec.ec), ec.custom_error_message));
 		}
 
 		_name = data.Name;
@@ -51,16 +51,16 @@ namespace DBD::Data
         }
     }
 
-	bool TexturePack::ReplaceTextures(RE::Actor* a_actor) const
+	bool TexturePack::Apply(RE::Actor* a_actor) const
 	{
 		assert(a_actor);
 		if (auto model = a_actor->Get3D()) {
-			return ReplaceTextures(model);
+			return Apply(model);
 		}
 		return false;
 	}
 
-	bool TexturePack::ReplaceTextures(RE::NiAVObject* a_object) const
+	bool TexturePack::Apply(RE::NiAVObject* a_object) const
 	{
         assert(a_object);
         auto ret = false;
@@ -159,8 +159,6 @@ namespace DBD::Data
 			const auto t = static_cast<Texture>(i);
 			const char* pathCStr = a_originalTextureSet->GetTexturePath(t);
 			std::string path{ pathCStr ? Util::CastLower(pathCStr) : "" };
-			constexpr auto DATA_PREFIX = "data"sv;
-			constexpr auto TEXTURE_PREFIX = "textures"sv;
 			if (path.starts_with(DATA_PREFIX))
 				path = path.substr(DATA_PREFIX.size() + 1);
 			if (path.starts_with(TEXTURE_PREFIX)) {

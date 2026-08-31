@@ -1,8 +1,6 @@
 #include "Functions.h"
 
 #include "DBD/Distribution.h"
-#include "DBD/SliderProfile.h"
-#include "DBD/TextureProfile.h"
 
 namespace Papyrus
 {
@@ -19,8 +17,8 @@ namespace Papyrus
 	std::vector<RE::BSFixedString> GetTextureProfiles(STATICARGS, RE::Actor* a_target)
 	{
 		std::vector<RE::BSFixedString> profiles;
-		DBD::Distribution::GetSingleton()->ForEachTextureProfile([&](const DBD::TextureProfile* a_profile) {
-			if (!a_target || a_profile->IsApplicable(a_target)) {
+		DBD::Distribution::GetSingleton()->GetDatabase().ForEach<DBD::Data::TexturePack>([&](const DBD::Data::TexturePack* a_profile) {
+			if (!a_target || a_profile->HasReplacements(a_target)) {
 				profiles.emplace_back(a_profile->GetName());
 			}
 		});
@@ -30,7 +28,7 @@ namespace Papyrus
 	std::vector<RE::BSFixedString> GetSliderProfiles(STATICARGS, RE::Actor* a_target)
 	{
 		std::vector<RE::BSFixedString> profiles;
-		DBD::Distribution::GetSingleton()->ForEachSliderProfile([&](const DBD::SliderProfile* a_profile) {
+		DBD::Distribution::GetSingleton()->GetDatabase().ForEach<DBD::Data::BodyslidePreset>([&](const DBD::Data::BodyslidePreset* a_profile) {
 			if (!a_target || a_profile->IsApplicable(a_target)) {
 				profiles.emplace_back(a_profile->GetName());
 			}
@@ -62,11 +60,11 @@ namespace Papyrus
 			TRACESTACK("Papyrus::GetProfiles - target is none");
 			return { "", "" };
 		}
-		const auto retVal = DBD::Distribution::GetSingleton()->GetProfiles(a_target);
+		const auto profileNames = DBD::Distribution::GetSingleton()->GetProfileNames(a_target);
 		std::vector<RE::BSFixedString> profiles;
-		profiles.reserve(retVal.size());
-		std::transform(retVal.begin(), retVal.end(), std::back_inserter(profiles),
-			[](const auto& profile) { return profile ? profile->GetName() : ""; });
+		profiles.reserve(profileNames.size());
+		std::ranges::transform(profileNames, std::back_inserter(profiles),
+			[](std::string_view a_name) { return RE::BSFixedString(a_name); });
 		return profiles;
 	}
 
@@ -76,7 +74,10 @@ namespace Papyrus
 			TRACESTACK("Papyrus::ClearProfiles - target is none");
 			return;
 		}
-		DBD::Distribution::GetSingleton()->ClearProfiles(a_target, a_exclude);
+		DBD::Distribution::GetSingleton()->ClearCache(a_target);
+		if (!a_exclude) {
+			a_target->DoReset3D(false);
+		}
 	}
 
 }  // namespace Papyrus

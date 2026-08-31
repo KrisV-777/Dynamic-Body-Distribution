@@ -77,7 +77,7 @@ namespace DBD::Data
 		}
 	}
 
-	void BodyslidePreset::ApplyPreset(RE::Actor* a_target) const
+	void BodyslidePreset::Apply(RE::Actor* a_target) const
 	{
 		logger::info("Applying slider profile {} to {}", _name.data(), a_target->formID);
 		_transformInterface->ClearBodyMorphKeys(a_target, MORPH_KEY);

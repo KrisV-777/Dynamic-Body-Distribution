@@ -3,7 +3,6 @@
 #include <shared/KrisV/Conditions/Conditional.h>
 
 #include "BodyslidePreset.h"
-#include "Category.h"
 #include "RaceMenuPreset.h"
 #include "TexturePack.h"
 
@@ -28,6 +27,8 @@ namespace DBD::Data
 		_NODISCARD bool ConditionsMet(RE::TESObjectREFR* a_subject) const;
 
 	private:
+		static uint16_t MapFunctionToPriority(RE::FUNCTION_DATA::FunctionID a_functionID);
+
 		std::string _name;
 		uint16_t _priority;
 		Conditions::Conditional _conditional;
