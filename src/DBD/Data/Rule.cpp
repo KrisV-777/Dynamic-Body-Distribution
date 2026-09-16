@@ -1,4 +1,4 @@
-﻿#include "Rule.h"
+#include "Rule.h"
 
 #include <glaze/glaze.hpp>
 #include <shared/KrisV/Random.h>

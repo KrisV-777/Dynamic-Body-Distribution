@@ -74,6 +74,7 @@ namespace DBD
 	{
 		logger::info("Initializing Database");
 
+		// TODO: Preset Interface currently isnt available at all. Look for an alternative?
 		SKEE::IBodyMorphInterface* morphInterface = nullptr;
 		SKEE::IPresetInterface* presetInterface = nullptr;
 		if (const auto intfc = SKEE::GetInterfaceMap()) {

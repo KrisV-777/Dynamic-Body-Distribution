@@ -1,4 +1,4 @@
-﻿#include "TexturePack.h"
+#include "TexturePack.h"
 
 #include <glaze/glaze.hpp>
 #include <shared/KrisV/Util/String.h>
