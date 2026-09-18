@@ -16,9 +16,9 @@ namespace DBD::Data
 
 		struct RuleData
 		{
-			std::string Id;
+			std::string Uid;
 			std::string Name;
-			std::chrono::system_clock::time_point LastUpdated;
+			std::chrono::system_clock::time_point LastUpdatedUtc;
 
 			std::vector<std::string> Conditions;
 

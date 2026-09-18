@@ -189,15 +189,16 @@ namespace DBD
 			logger::critical("Path to textures does not exist");
 			return;
 		}
-		for (const auto& file : fs::recursive_directory_iterator{ TEXTURE_ROOT_PATH }) {
-			if (!file.is_regular_file() || file.path().extension() != ".json") {
+		for (const auto& folder : fs::directory_iterator{ TEXTURE_ROOT_PATH }) {
+			const auto file = fs::path(folder.path()).append("config.json");
+			if (!fs::exists(file) || file.extension() != ".json") {
 				continue;
 			}
 			try {
-				_texturePacks.emplace_back(std::make_shared<TexturePack>(file.path().string()));
-				logger::info("Added Texture Set: {}", file.path().filename().string());
+				_texturePacks.emplace_back(std::make_shared<TexturePack>(file.string()));
+				logger::info("Added Texture Set: {}", file.filename().string());
 			} catch (const std::exception& e) {
-				logger::error("Failed to add Texture Set: {}. Error: {}", file.path().filename().string(), e.what());
+				logger::error("Failed to add Texture Set: {}. Error: {}", file.filename().string(), e.what());
 			}
 		}
 	}
