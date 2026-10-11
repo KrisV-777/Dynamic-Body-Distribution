@@ -208,6 +208,9 @@ namespace DBD
 		if (!morphInterface) {
 			logger::critical("Missing morph interface. Skipping slider profile initialization");
 			return;
+		} else if (!fs::exists(SLIDER_ROOT_PATH)) {
+			logger::critical("Path to slider profiles does not exist");
+			return;
 		}
 		SliderConfig sliderConfig{};
 		for (auto& xmlFile : fs::directory_iterator{ SLIDER_ROOT_PATH }) {
@@ -230,6 +233,9 @@ namespace DBD
 	{
 		if (!presetInterface) {
 			logger::critical("Missing preset interface. Skipping RaceMenu preset initialization");
+			return;
+		} else if (!fs::exists(RACEMENU_ROOT_PATH)) {
+			logger::critical("Path to RaceMenu presets does not exist");
 			return;
 		}
 		for (auto& jslotFile : fs::directory_iterator{ RACEMENU_ROOT_PATH }) {
