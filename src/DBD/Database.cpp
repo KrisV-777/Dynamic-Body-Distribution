@@ -195,7 +195,7 @@ namespace DBD
 				continue;
 			}
 			try {
-				_texturePacks.emplace_back(std::make_shared<TexturePack>(file.string()));
+				_texturePacks.emplace_back(std::make_shared<TexturePack>(file));
 				logger::info("Added Texture Set: {}", file.filename().string());
 			} catch (const std::exception& e) {
 				logger::error("Failed to add Texture Set: {}. Error: {}", file.filename().string(), e.what());
@@ -263,7 +263,7 @@ namespace DBD
 				continue;
 			}
 			try {
-				preloadedRules.emplace_back(file.path().string());
+				preloadedRules.emplace_back(file.path());
 				logger::info("Added Rule: {}", file.path().filename().string());
 			} catch (const std::exception& e) {
 				logger::error("Failed to add Rule: {}. Error: {}", file.path().filename().string(), e.what());

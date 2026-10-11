@@ -29,13 +29,14 @@ namespace DBD::Data
 		static_assert(glz::reflectable<RuleData>);
 	}
 
-	PreloadedRule::PreloadedRule(std::string_view a_jsonFilePath)
+	PreloadedRule::PreloadedRule(const fs::path& a_jsonFilePath)
 	{
+		const auto jsonPath = a_jsonFilePath.string();
 		detail::RuleData data;
-		if (auto ec = glz::read_file_json(data, a_jsonFilePath.data(), std::string{})) {
+		if (auto ec = glz::read_file_json(data, jsonPath, std::string{})) {
 			throw std::runtime_error(
 				std::format("Failed to load Rule from {} with Error Code {}: {}",
-					a_jsonFilePath, std::to_underlying(ec.ec), ec.custom_error_message));
+					a_jsonFilePath.string(), std::to_underlying(ec.ec), ec.custom_error_message));
 		}
 
 		_name = data.Name;

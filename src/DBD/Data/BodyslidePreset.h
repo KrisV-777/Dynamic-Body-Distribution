@@ -62,6 +62,6 @@ namespace DBD::Data
 	};
 
 	std::vector<std::shared_ptr<BodyslidePreset>> LoadBodyslidePresets(
-        const std::filesystem::path& a_xmlfilePath, SKEE::IBodyMorphInterface* a_interface, SliderConfig* a_config);
+        const fs::path& a_xmlfilePath, SKEE::IBodyMorphInterface* a_interface, SliderConfig* a_config);
 
 } // namespace DBD::Data

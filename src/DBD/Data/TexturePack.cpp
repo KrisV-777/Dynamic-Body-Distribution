@@ -25,19 +25,22 @@ namespace DBD::Data
 		static_assert(glz::reflectable<TextureData>);
 	}
 
-	TexturePack::TexturePack(std::string_view a_jsonFilePath)
+	TexturePack::TexturePack(const fs::path& a_jsonFilePath)
 	{
+		const auto jsonPath = a_jsonFilePath.string();
 		detail::TextureData data;
-		if (auto ec = glz::read_file_json(data, a_jsonFilePath.data(), std::string{})) {
+		if (auto ec = glz::read_file_json(data, jsonPath, std::string{})) {
 			throw std::runtime_error(
 				std::format("Failed to load TexturePack from {} with Error Code {}: {}",
-					a_jsonFilePath, std::to_underlying(ec.ec), ec.custom_error_message));
+					a_jsonFilePath.string(), std::to_underlying(ec.ec), ec.custom_error_message));
 		}
+		
+		const auto parentFolder = a_jsonFilePath.parent_path().filename().string();
 
 		_name = data.Name;
 		_description = data.Description;
 		for (const auto& mapping : data.Mappings) {
-			_textureMappings[mapping.VanillaTexture] = mapping.ReplacementTexture;
+			_textureMappings[mapping.VanillaTexture] = std::format("dbd/{}/{}", parentFolder, mapping.ReplacementTexture);
 		}
 	}
 
@@ -164,6 +167,7 @@ namespace DBD::Data
 			if (path.starts_with(TEXTURE_PREFIX)) {
 				path = path.substr(TEXTURE_PREFIX.size() + 1);
 			}
+			std::replace(path.begin(), path.end(), '\\', '/');
 			const auto it = _textureMappings.find(path);
 			if (it != _textureMappings.end()) {
 				texturePaths[i] = it->second.c_str();

@@ -110,11 +110,11 @@ namespace DBD::Data
 	}
 
 	std::vector<std::shared_ptr<BodyslidePreset>> LoadBodyslidePresets(
-		const std::filesystem::path& a_xmlfilePath, SKEE::IBodyMorphInterface* a_interface, SliderConfig* a_config)
+		const fs::path& a_xmlfilePath, SKEE::IBodyMorphInterface* a_interface, SliderConfig* a_config)
 	{
 		if (a_xmlfilePath.empty() || a_xmlfilePath.extension() != ".xml") {
 			throw std::invalid_argument("XML file path cannot be empty");
-		} else if (!std::filesystem::exists(a_xmlfilePath)) {
+		} else if (!fs::exists(a_xmlfilePath)) {
 			throw std::invalid_argument(std::format("XML file does not exist: {}", a_xmlfilePath.string()));
 		} else if (!a_interface) {
 			throw std::runtime_error(std::format("Missing transform interface: {}", a_xmlfilePath.string()));

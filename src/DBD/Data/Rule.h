@@ -46,7 +46,7 @@ namespace DBD::Data
 		};
 
 	public:
-		PreloadedRule(std::string_view a_jsonFilePath);
+		PreloadedRule(const fs::path& a_jsonFilePath);
 		~PreloadedRule() = default;
 
 	public:

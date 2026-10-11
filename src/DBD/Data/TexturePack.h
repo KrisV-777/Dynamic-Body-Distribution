@@ -5,9 +5,9 @@ namespace DBD::Data
 	class TexturePack
 	{
 	public:
-		/// @brief Constructs a TexturePack from a JSON string.
+		/// @brief Constructs a TexturePack from a JSON file path.
 		/// @throws std::runtime_error if the JSON is invalid or cannot be parsed.
-		TexturePack(std::string_view a_json);
+		TexturePack(const fs::path& a_jsonFilePath);
 		~TexturePack() noexcept;
 
 		/// @return The name of the texture pack.
