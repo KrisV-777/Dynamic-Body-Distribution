@@ -167,6 +167,8 @@ target(PROJECT_NAME)
     add_files("src/**.cpp")
     add_headerfiles("src/**.h")
     add_includedirs("src")
+    add_installfiles("dist/SKSE/CustomConsole/*.yml", {prefixdir = "SKSE/CustomConsole"})
+    add_installfiles("dist/SKSE/DBD/SliderConfig/*.yml", {prefixdir = "SKSE/DBD/SliderConfig"})
 
     -- flags
     add_cxxflags(
