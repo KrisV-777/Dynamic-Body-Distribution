@@ -5,82 +5,62 @@
 
 namespace DBD
 {
-	const Distribution::ActorConfig& Distribution::SelectProfiles(RE::Actor* a_target) const
+	const Data::ReferenceConfiguration& Distribution::SelectProfiles(RE::Actor* a_target) const
 	{
-		auto it = _actorConfigs.find(a_target->formID);
+		std::unique_lock lock{ _mutex };
+		auto it = _actorConfigs.find(Data::ReferenceConfiguration{ a_target->formID });
 		if (it != _actorConfigs.end()) {
-			auto& config = it->second;
-			if (!config._updatedThisSession) {
-				config._updatedThisSession = true;
-				if (!config.texturePack)
-					config.texturePack = _database.SelectTexturePack(a_target);
-				if (!config.bodyslidePreset)
-					config.bodyslidePreset = _database.SelectBodyslidePreset(a_target);
-				if (!config.raceMenuPreset) {
-					config.raceMenuPreset = _database.SelectRaceMenuPreset(a_target);
-				}
-			}
-			return config;
+			return *it;
 		}
-
-		ActorConfig retVal{
-			.texturePack = _database.SelectTexturePack(a_target),
-			.bodyslidePreset = _database.SelectBodyslidePreset(a_target),
-			.raceMenuPreset = _database.SelectRaceMenuPreset(a_target)
-		};
-
-		const auto result = _actorConfigs.emplace(a_target->formID, std::move(retVal));
-		return result.first->second;
+		const auto result = _actorConfigs.emplace(a_target, _database);
+		return *result.first;
 	}
 
-	std::array<std::string_view, 2> Distribution::GetProfileNames(RE::Actor* a_target) const
+	std::unordered_set<Data::ReferenceConfiguration>::node_type Distribution::SelectProfilesMutable(RE::Actor* a_target) const
 	{
-		const auto& config = SelectProfiles(a_target);
-		return {
-			config.texturePack ? config.texturePack->GetName() : std::string_view{},
-			config.bodyslidePreset ? config.bodyslidePreset->GetName() : std::string_view{}
-		};
+		auto node = _actorConfigs.extract(Data::ReferenceConfiguration{ a_target->formID });
+		if (!node.empty()) {
+			return node;
+		}
+
+		auto [it, _] = _actorConfigs.emplace(a_target, _database);
+		return _actorConfigs.extract(it);
 	}
 
 	void Distribution::ApplyProfiles(RE::Actor* a_target, RE::NiAVObject* a_part) const
 	{
 		const auto& config = SelectProfiles(a_target);
-		if (config.texturePack) {
-			if (!a_part) {
-				a_part = a_target->Get3D();
-				if (!a_part) {
-					logger::warn("Actor {} has no 3D model, skipping texture pack application", a_target->formID);
-					return;
-				}
-			}
-			config.texturePack->Apply(a_part);
-		}
-		if (config.bodyslidePreset) {
-			config.bodyslidePreset->Apply(a_target);
-		}
-		if (config.raceMenuPreset) {
-			config.raceMenuPreset->Apply(a_target);
-		}
+		config.ApplyProfiles(a_part);
+	}
+
+	std::array<std::string, 3> Distribution::GetProfileNames(RE::Actor* a_target) const
+	{
+		const auto& config = SelectProfiles(a_target);
+		return config.GetProfileNames();
 	}
 
 	bool Distribution::ApplyTextureProfile(RE::Actor* a_target, std::string_view a_profileName) const
 	{
 		const auto texturePack = _database.FindTexturePackByName(a_profileName);
-		if (texturePack) {
-			_actorConfigs[a_target->formID].texturePack = texturePack;
-			texturePack->Apply(a_target);
-			return true;
+		if (!texturePack) {
+			return false;
 		}
-		return false;
+		std::unique_lock lock{ _mutex };
+		auto node = SelectProfilesMutable(a_target);
+		const auto ret = node.value().AddTexturePack(texturePack);
+		_actorConfigs.insert(std::move(node));
+		return ret;
 	}
 
 	bool Distribution::ApplySliderProfile(RE::Actor* a_target, std::string_view a_profileName) const
 	{
 		const auto bodyslidePreset = _database.FindBodyslidePresetByName(a_profileName);
 		if (bodyslidePreset && bodyslidePreset->IsApplicable(a_target)) {
-			_actorConfigs[a_target->formID].bodyslidePreset = bodyslidePreset;
-			bodyslidePreset->Apply(a_target);
-			return true;
+			std::unique_lock lock{ _mutex };
+			auto node = SelectProfilesMutable(a_target);
+			const auto ret = node.value().SetBodyslidePreset(bodyslidePreset);
+			_actorConfigs.insert(std::move(node));
+			return ret;
 		}
 		return false;
 	}
@@ -89,9 +69,11 @@ namespace DBD
 	{
 		const auto raceMenuPreset = _database.FindRaceMenuPresetByName(a_profileName);
 		if (raceMenuPreset) {
-			_actorConfigs[a_target->formID].raceMenuPreset = raceMenuPreset;
-			raceMenuPreset->Apply(a_target);
-			return true;
+			std::unique_lock lock{ _mutex };
+			auto node = SelectProfilesMutable(a_target);
+			const auto ret = node.value().SetRaceMenuPreset(raceMenuPreset);
+			_actorConfigs.insert(std::move(node));
+			return ret;
 		}
 		return false;
 	}
@@ -103,14 +85,8 @@ namespace DBD
 			logger::error("Failed to save number of regs ({})", numRegs);
 			return;
 		}
-		for (auto&& [formID, data] : _actorConfigs) {
-			if (!a_intfc->WriteRecordData(formID)) {
-				logger::error("Failed to save reg ({:X})", formID);
-				continue;
-			}
-			::stl::write_string(a_intfc, data.texturePack ? data.texturePack->GetName() : "");
-			::stl::write_string(a_intfc, data.bodyslidePreset ? data.bodyslidePreset->GetName() : "");
-			::stl::write_string(a_intfc, data.raceMenuPreset ? data.raceMenuPreset->GetName() : "");
+		for (auto&& data : _actorConfigs) {
+			data.Save(a_intfc, 0);
 		}
 	}
 
@@ -121,25 +97,10 @@ namespace DBD
 		a_intfc->ReadRecordData(numRegs);
 		_actorConfigs.reserve(numRegs);
 
-		RE::FormID formID;
 		for (size_t i = 0; i < numRegs; i++) {
-			a_intfc->ReadRecordData(formID);
-			if (!a_intfc->ResolveFormID(formID, formID)) {
-				logger::warn("Error reading formID: {:X}", formID);
-				continue;
+			if (auto config = Data::ReferenceConfiguration::Load(a_intfc, _database, 0)) {
+				_actorConfigs.emplace(std::move(*config));
 			}
-			std::array<std::string, 3> profileNames;
-			if (!std::ranges::all_of(profileNames, [&](auto& a_name) { return ::stl::read_string(a_intfc, a_name); })) {
-				logger::error("Failed to read profiles for form {:X}", formID);
-				return;
-			}
-			const auto& [textureProfile, bodyslideProfile, raceMenuProfile] = profileNames;
-			ActorConfig config{
-				.texturePack = textureProfile.empty() ? nullptr : _database.FindTexturePackByName(textureProfile),
-				.bodyslidePreset = bodyslideProfile.empty() ? nullptr : _database.FindBodyslidePresetByName(bodyslideProfile),
-				.raceMenuPreset = raceMenuProfile.empty() ? nullptr : _database.FindRaceMenuPresetByName(raceMenuProfile)
-			};
-			_actorConfigs.emplace(formID, std::move(config));
 		}
 		logger::info("Loaded {} cache entries", _actorConfigs.size());
 	}

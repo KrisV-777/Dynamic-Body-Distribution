@@ -21,6 +21,10 @@ namespace DBD::Data
 		_NODISCARD std::shared_ptr<BodyslidePreset> SelectBodyslidePreset(RE::Actor* a_actor) const;
 		_NODISCARD std::shared_ptr<RaceMenuPreset> SelectRaceMenuPreset(RE::Actor* a_actor) const;
 
+		_NODISCARD const std::vector<std::shared_ptr<TexturePack>>& GetTexturePacks() const { return _texturePacks; }
+		_NODISCARD const std::vector<std::shared_ptr<BodyslidePreset>>& GetBodyslidePresets() const { return _bodyslidePresets; }
+		_NODISCARD const std::vector<std::shared_ptr<RaceMenuPreset>>& GetRaceMenuPresets() const { return _raceMenuPresets; }
+
 		_NODISCARD std::string_view GetName() const { return _name; }
 		_NODISCARD uint16_t GetPriority() const { return _priority; }
 

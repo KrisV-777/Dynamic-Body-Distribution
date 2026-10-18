@@ -23,6 +23,21 @@ namespace DBD::Data
 			std::chrono::system_clock::time_point LastUpdatedUtc;
 		};
 		static_assert(glz::reflectable<TextureData>);
+
+		std::string NormalizeTexturePath(const char* a_pathCStr)
+		{
+			std::string path{ a_pathCStr ? Util::CastLower(a_pathCStr) : "" };
+			constexpr std::string_view dataPrefix{ "data" };
+			constexpr std::string_view texturesPrefix{ "textures" };
+			if (path.starts_with(dataPrefix)) {
+				path = path.substr(dataPrefix.size() + 1);
+			}
+			if (path.starts_with(texturesPrefix)) {
+				path = path.substr(texturesPrefix.size() + 1);
+			}
+			std::replace(path.begin(), path.end(), '\\', '/');
+			return path;
+		}
 	}
 
 	TexturePack::TexturePack(const fs::path& a_jsonFilePath)
@@ -34,7 +49,6 @@ namespace DBD::Data
 				std::format("Failed to load TexturePack from {} with Error Code {}: {}",
 					a_jsonFilePath.string(), std::to_underlying(ec.ec), ec.custom_error_message));
 		}
-		
 		const auto parentFolder = a_jsonFilePath.parent_path().filename().string();
 
 		_name = data.Name;
@@ -44,31 +58,41 @@ namespace DBD::Data
 		}
 	}
 
-    TexturePack::~TexturePack() noexcept
-    {
-        for (const auto& [original, replacement] : _createdTextureSets) {
-            if (replacement) {
-                replacement->~BSTextureSet();
-                RE::free(replacement);
-            }
-        }
-    }
-
-	bool TexturePack::Apply(RE::Actor* a_actor) const
+	bool TexturePack::WriteMap(RE::Actor* a_actor, TextureMap& a_textureOverrides) const
 	{
 		assert(a_actor);
 		if (auto model = a_actor->Get3D()) {
-			return Apply(model);
+			return WriteMap(model, a_textureOverrides);
 		}
 		return false;
 	}
 
-	bool TexturePack::Apply(RE::NiAVObject* a_object) const
+	bool TexturePack::WriteMap(RE::NiAVObject* a_object, TextureMap& a_textureOverrides) const
 	{
-        assert(a_object);
-        auto ret = false;
+		assert(a_object);
+		auto ret = false;
 		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) {
-			ret |= OverrideGeometry(a_geometry);
+			const auto lightingShader = a_geometry->lightingShaderProp_cast();
+			if (!lightingShader) {
+				return RE::BSVisit::BSVisitControl::kContinue;
+			}
+			constexpr auto alphaThreshold = 1.f / 255.f;
+			const auto material = static_cast<RE::BSLightingShaderMaterialBase*>(lightingShader->material);
+			if (material->materialAlpha < alphaThreshold) {
+				return RE::BSVisit::BSVisitControl::kContinue;
+			}
+			const auto materialTexture = material->GetTextureSet();
+			using Texture = RE::BSTextureSet::Texture;
+			for (size_t i = 0; i < Texture::kTotal; i++) {
+				const auto t = static_cast<Texture>(i);
+				const char* pathCStr = materialTexture->GetTexturePath(t);
+				std::string path = detail::NormalizeTexturePath(pathCStr);
+				const auto it = _textureMappings.find(path);
+				if (it != _textureMappings.end()) {
+					a_textureOverrides[it->first] = it->second;
+					ret = true;
+				}
+			}
 			return RE::BSVisit::BSVisitControl::kContinue;
 		});
 		return ret;
@@ -77,221 +101,15 @@ namespace DBD::Data
 	bool TexturePack::HasReplacements(RE::Actor* a_actor) const
 	{
 		assert(a_actor);
-        if (auto model = a_actor->Get3D()) {
-            return HasReplacements(model);
-        }
-        return false;
+		TextureMap textureOverrides;
+		return WriteMap(a_actor, textureOverrides);
 	}
 
 	bool TexturePack::HasReplacements(RE::NiAVObject* a_object) const
 	{
-        assert(a_object);
-		auto ret = false;
-		using VisitControl = RE::BSVisit::BSVisitControl;
-		RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) {
-			const auto lightingShader = a_geometry->lightingShaderProp_cast();
-			if (!lightingShader) {
-				return VisitControl::kContinue;
-			}
-			constexpr auto alphaThreshold = 1.f / 255.f;
-			const auto material = static_cast<RE::BSLightingShaderMaterialBase*>(lightingShader->material);
-			if (material->materialAlpha < alphaThreshold) {
-				return VisitControl::kContinue;
-			}
-			const auto materialTexture = material->GetTextureSet();
-			const auto replacement = BuildReplacementTextureSet(materialTexture.get());
-            if (!replacement) {
-				return VisitControl::kContinue;
-			}
-			ret = true;
-			return VisitControl::kStop;
-		});
-		return ret;
-	}
-
-	bool TexturePack::OverrideGeometry(RE::BSGeometry* a_geometry) const
-	{
-		const auto lightingShader = a_geometry->lightingShaderProp_cast();
-		if (!lightingShader) {
-			return false;
-		}
-		constexpr auto alphaThreshold = 1.f / 255.f;
-		const auto material = static_cast<RE::BSLightingShaderMaterialBase*>(lightingShader->material);
-		if (material->materialAlpha < alphaThreshold) {
-			return false;
-		}
-		const auto materialTexture = material->GetTextureSet();
-		const auto materialTextureNew = BuildReplacementTextureSet(materialTexture.get());
-		if (!materialTextureNew) {
-			return false;
-		}
-		const auto newMaterial = static_cast<RE::BSLightingShaderMaterialBase*>(material->Create());
-		if (!newMaterial) {
-			return false;
-		}
-		newMaterial->CopyMembers(material);
-		newMaterial->ClearTextures();
-
-		newMaterial->OnLoadTextureSet(0, materialTextureNew);
-		CopyFeatureSpecificTextures(material, newMaterial);
-
-		lightingShader->SetMaterial(newMaterial, true);
-		lightingShader->SetupGeometry(a_geometry);
-		lightingShader->FinishSetupGeometry(a_geometry);
-
-		newMaterial->~BSLightingShaderMaterialBase();
-		RE::free(newMaterial);
-
-		return true;
-	}
-
-	RE::BSTextureSet* TexturePack::BuildReplacementTextureSet(RE::BSTextureSet* a_originalTextureSet) const
-	{
-		const auto existingReplacementIt = _createdTextureSets.find(a_originalTextureSet);
-		if (existingReplacementIt != _createdTextureSets.end()) {
-            assert(existingReplacementIt->second);
-			return existingReplacementIt->second;
-		}
-
-		using Texture = RE::BSTextureSet::Texture;
-		std::array<const char*, Texture::kTotal> texturePaths;
-		bool hasOverwritten = false;
-		constexpr auto DATA_PREFIX = "data"sv;
-		constexpr auto TEXTURE_PREFIX = "textures"sv;
-		for (size_t i = 0; i < Texture::kTotal; i++) {
-			const auto t = static_cast<Texture>(i);
-			const char* pathCStr = a_originalTextureSet->GetTexturePath(t);
-			std::string path{ pathCStr ? Util::CastLower(pathCStr) : "" };
-			if (path.starts_with(DATA_PREFIX))
-				path = path.substr(DATA_PREFIX.size() + 1);
-			if (path.starts_with(TEXTURE_PREFIX)) {
-				path = path.substr(TEXTURE_PREFIX.size() + 1);
-			}
-			std::replace(path.begin(), path.end(), '\\', '/');
-			const auto it = _textureMappings.find(path);
-			if (it != _textureMappings.end()) {
-				texturePaths[i] = it->second.c_str();
-				hasOverwritten = true;
-			} else {
-				texturePaths[i] = pathCStr;
-			}
-		}
-		if (!hasOverwritten)
-			return nullptr;
-		const auto materialTextureNew = RE::BSShaderTextureSet::Create();
-		if (!materialTextureNew)
-			return nullptr;
-		for (size_t i = 0; i < Texture::kTotal; i++) {
-			materialTextureNew->SetTexturePath(static_cast<Texture>(i), texturePaths[i]);
-		}
-		_createdTextureSets[a_originalTextureSet] = materialTextureNew;
-		return materialTextureNew;
-	}
-
-	void TexturePack::CopyFeatureSpecificTextures(RE::BSLightingShaderMaterialBase* a_source, RE::BSLightingShaderMaterialBase* a_target) const
-	{
-		using Feature = RE::BSLightingShaderMaterialBase::Feature;
-		assert(a_source && a_target);
-
-		const auto feature = a_source->GetFeature();
-		switch (feature) {
-		case Feature::kDefault:
-			break;
-		case Feature::kEnvironmentMap:
-			{
-				const auto oldEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(a_source);
-				const auto newEnvMap = static_cast<RE::BSLightingShaderMaterialEnvmap*>(a_target);
-				if (!newEnvMap->envTexture)
-					newEnvMap->envTexture = oldEnvMap->envTexture;
-				if (!newEnvMap->envMaskTexture) {
-					newEnvMap->envMaskTexture = oldEnvMap->envMaskTexture;
-				}
-			}
-			break;
-		case Feature::kEye:
-			{
-				const auto oldEye = static_cast<RE::BSLightingShaderMaterialEye*>(a_source);
-				const auto newEye = static_cast<RE::BSLightingShaderMaterialEye*>(a_target);
-				if (!newEye->envTexture)
-					newEye->envTexture = oldEye->envTexture;
-				if (!newEye->envMaskTexture) {
-					newEye->envMaskTexture = oldEye->envMaskTexture;
-				}
-			}
-			break;
-		case Feature::kFaceGen:
-			{
-				const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialFacegen*>(a_source);
-				const auto newFacegen = static_cast<RE::BSLightingShaderMaterialFacegen*>(a_target);
-				newFacegen->tintTexture = oldFacegen->tintTexture;
-				newFacegen->detailTexture = oldFacegen->detailTexture;
-			}
-			break;
-		case Feature::kFaceGenRGBTint:
-			{
-				const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(a_source);
-				const auto newFacegen = static_cast<RE::BSLightingShaderMaterialFacegenTint*>(a_target);
-				newFacegen->tintColor = oldFacegen->tintColor;
-			}
-			break;
-		case Feature::kGlowMap:
-			{
-				const auto oldEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(a_source);
-				const auto newEye = static_cast<RE::BSLightingShaderMaterialGlowmap*>(a_target);
-				if (!newEye->glowTexture)
-					newEye->glowTexture = oldEye->glowTexture;
-			}
-			break;
-		case Feature::kHairTint:
-			{
-				const auto oldFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(a_source);
-				const auto newFacegen = static_cast<RE::BSLightingShaderMaterialHairTint*>(a_target);
-				newFacegen->tintColor = oldFacegen->tintColor;
-			}
-			break;
-		case Feature::kMultilayerParallax:
-			{
-				const auto oldParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(a_source);
-				const auto newParallax = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(a_target);
-				if (!newParallax->layerTexture)
-					newParallax->layerTexture = oldParallax->layerTexture;
-				if (!newParallax->envTexture)
-					newParallax->envTexture = oldParallax->envTexture;
-				if (!newParallax->envMaskTexture)
-					newParallax->envMaskTexture = oldParallax->envMaskTexture;
-			}
-			break;
-		case Feature::kParallax:
-			{
-				const auto oldParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(a_source);
-				const auto newParallax = static_cast<RE::BSLightingShaderMaterialParallax*>(a_target);
-				if (!newParallax->heightTexture)
-					newParallax->heightTexture = oldParallax->heightTexture;
-			}
-			break;
-		case Feature::kUnknown:
-		case Feature::kMultiIndexTriShapeSnow:
-			{
-				const auto oldSnow = static_cast<RE::BSLightingShaderMaterialSnow*>(a_source);
-				const auto newSnow = static_cast<RE::BSLightingShaderMaterialSnow*>(a_target);
-				newSnow->sparkleParams = oldSnow->sparkleParams;
-			}
-			break;
-		case Feature::kParallaxOcc:
-			{
-				const auto oldParallaxOcc = static_cast<RE::BSLightingShaderMaterialParallaxOcc*>(a_source);
-				const auto newParallaxOcc = static_cast<RE::BSLightingShaderMaterialParallaxOcc*>(a_target);
-				if (!newParallaxOcc->heightTexture)
-					newParallaxOcc->heightTexture = oldParallaxOcc->heightTexture;
-				newParallaxOcc->parallaxOccMaxPasses = oldParallaxOcc->parallaxOccMaxPasses;
-				newParallaxOcc->parallaxOccScale = oldParallaxOcc->parallaxOccScale;
-			}
-			break;
-		default:
-			logger::error("Unsupported material feature: {}", magic_enum::enum_name<Feature>(feature));
-			assert(false && "Unsupported material feature");
-			break;
-		}
+		assert(a_object);
+		TextureMap textureOverrides;
+		return WriteMap(a_object, textureOverrides);
 	}
 
 }  // namespace DBD::Data

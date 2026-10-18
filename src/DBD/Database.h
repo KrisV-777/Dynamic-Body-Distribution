@@ -3,6 +3,7 @@
 #include <shared/KrisV/Singleton.h>
 
 #include "Data/Rule.h"
+#include "Data/TexturePreset.h"
 
 namespace DBD
 {
@@ -18,6 +19,7 @@ namespace DBD
 		~Database() = default;
 
 		_NODISCARD std::shared_ptr<Data::TexturePack> SelectTexturePack(RE::Actor* a_actor) const;
+		_NODISCARD std::shared_ptr<Data::TexturePreset> BuildTexturePreset(RE::Actor* a_actor) const;
 		_NODISCARD std::shared_ptr<Data::BodyslidePreset> SelectBodyslidePreset(RE::Actor* a_actor) const;
 		_NODISCARD std::shared_ptr<Data::RaceMenuPreset> SelectRaceMenuPreset(RE::Actor* a_actor) const;
 

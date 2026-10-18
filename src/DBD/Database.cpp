@@ -137,6 +137,30 @@ namespace DBD
 		return selectedPack;
 	}
 
+	std::shared_ptr<Data::TexturePreset> Database::BuildTexturePreset(RE::Actor* a_actor) const
+	{
+		std::vector<std::pair<uint16_t, const Data::Rule*>> candidates;
+		for (const auto& rule : _rules) {
+			if (!rule.ConditionsMet(a_actor)) {
+				continue;
+			}
+			candidates.emplace_back(rule.GetPriority(), std::addressof(rule));
+		}
+		std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
+			return a.first > b.first;
+		});
+		Data::TexturePreset ret{};
+		for (const auto& [priority, rule] : candidates)
+		{
+			for (const auto& texturePack : rule->GetTexturePacks()) {
+				ret.packs.emplace(texturePack);
+				texturePack->WriteMap(a_actor, ret.data);
+			}
+		}
+		return std::make_shared<Data::TexturePreset>(std::move(ret));
+	}
+
+
 	std::shared_ptr<BodyslidePreset> Database::SelectBodyslidePreset(RE::Actor* a_actor) const
 	{
 		std::shared_ptr<BodyslidePreset> selectedPreset = nullptr;
